@@ -133,10 +133,12 @@ input[type="radio"] { display: none; }
 .search-box { position: relative; margin-bottom: 12px; }
 .search-box input { padding-left: 38px; }
 .search-box .si { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-soft); }
+.cand-list { background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; }
 .cand-item, .food-item {
-  display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 12px;
-  padding: 12px; margin-bottom: 8px; box-shadow: var(--shadow); cursor: pointer;
+  display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 10px;
+  padding: 10px 12px; margin-bottom: 4px; cursor: pointer;
 }
+.cand-item:last-child, .food-item:last-child { margin-bottom: 0; }
 .cand-item:active, .food-item:active { background: var(--primary-light); }
 .cand-main, .food-main { flex: 1; min-width: 0; }
 .cand-name, .food-name { font-weight: 600; font-size: 15px; }

@@ -146,7 +146,12 @@ window.Admin = (function () {
         '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>编号</th><th>名称</th><th>状态</th><th>操作</th></tr></thead><tbody id="pbody"></tbody></table></div>' +
       '</div>' +
       '<div class="card"><div class="row-between"><h2>🔩 工序</h2><button class="btn sm" id="addPt">+ 新增工序</button></div>' +
-        '<div class="field"><label>选择产品</label><select id="pSel"></select></div>' +
+        '<div class="field"><label>选择产品</label>' +
+          '<div class="search-box" style="margin-bottom:8px"><div class="si">🔍</div><input type="text" id="pSelSearch" placeholder="输入产品编号或名称搜索，如 13811 或 摇臂" autocomplete="off" /></div>' +
+          '<div id="pSelList" class="cand-list" style="display:none; max-height: 260px; overflow-y: auto; margin-bottom: 10px;"></div>' +
+          '<select id="pSel" style="display:none;"></select>' +
+          '<div id="pSelTag" class="selbox" style="display:none; margin-top:8px"><div class="sb-label">已选产品</div><div class="sb-value" id="pSelTagVal"></div></div>' +
+        '</div>' +
         '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>工序号</th><th>工序名</th><th>状态</th><th>操作</th></tr></thead><tbody id="ptbody"></tbody></table></div>' +
       '</div>';
 
@@ -158,11 +163,80 @@ window.Admin = (function () {
           return '<tr><td>' + esc(p.code) + '</td><td>' + esc(p.name) + '</td><td>' + (p.enabled ? '<span class="badge ok">启用</span>' : '<span class="badge off">停用</span>') + '</td>' +
             '<td><button class="btn sm" data-edit="' + p.id + '">编辑</button> <button class="btn sm danger" data-del="' + p.id + '">' + (p.enabled ? '停用' : '启用') + '</button></td></tr>';
         }).join('');
-        // 产品下拉
+
+        // 可搜索产品选择器
+        var enabled = ps.filter(function (p) { return p.enabled; });
         var sel = document.getElementById('pSel');
-        sel.innerHTML = ps.filter(function (p) { return p.enabled; }).map(function (p) { return '<option value="' + p.id + '">' + esc(p.code) + ' ' + esc(p.name) + '</option>'; }).join('');
+        sel.innerHTML = enabled.map(function (p) { return '<option value="' + p.id + '">' + esc(p.code) + ' ' + esc(p.name) + '</option>'; }).join('');
         sel.onchange = loadParts;
-        loadParts();
+
+        var search = document.getElementById('pSelSearch');
+        var list = document.getElementById('pSelList');
+        var tag = document.getElementById('pSelTag');
+        var tagVal = document.getElementById('pSelTagVal');
+        var activeIndex = -1;
+
+        function productText(p) { return esc(p.code) + ' ' + esc(p.name); }
+        function selectProduct(p) {
+          sel.value = p.id;
+          search.value = productText(p);
+          if (tag) { tag.style.display = 'block'; tagVal.textContent = productText(p); }
+          if (list) list.style.display = 'none';
+          activeIndex = -1;
+          loadParts();
+        }
+        function renderList(items) {
+          if (!items.length) { list.innerHTML = '<div class="cand-item" style="color:var(--text-soft)">无匹配产品</div>'; list.style.display = 'block'; activeIndex = -1; return; }
+          list.innerHTML = items.map(function (p, i) {
+            return '<div class="cand-item psel-item" data-index="' + i + '" data-id="' + p.id + '"><div class="cand-main"><div class="cand-name">' + esc(p.code) + '</div><div class="cand-sub">' + esc(p.name) + '</div></div></div>';
+          }).join('');
+          list.style.display = 'block';
+          activeIndex = -1;
+          list.querySelectorAll('.psel-item').forEach(function (el) {
+            el.onclick = function () {
+              var id = el.getAttribute('data-id');
+              var p = enabled.find(function (x) { return x.id === id; });
+              if (p) selectProduct(p);
+            };
+          });
+        }
+        function filterAndShow(q) {
+          q = q.trim().toLowerCase();
+          if (!q) { list.style.display = 'none'; return; }
+          renderList(enabled.filter(function (p) {
+            return (p.code || '').toLowerCase().indexOf(q) !== -1 || (p.name || '').toLowerCase().indexOf(q) !== -1;
+          }));
+        }
+        function updateActive(dir) {
+          var items = list.querySelectorAll('.psel-item');
+          if (!items.length) return;
+          activeIndex = Math.max(0, Math.min(items.length - 1, activeIndex + dir));
+          items.forEach(function (el, i) { el.style.background = i === activeIndex ? 'var(--primary-light)' : '#fff'; });
+          items[activeIndex].scrollIntoView({ block: 'nearest' });
+        }
+
+        search.addEventListener('input', function () { filterAndShow(search.value); });
+        search.addEventListener('focus', function () { if (search.value.trim()) filterAndShow(search.value); });
+        search.addEventListener('keydown', function (e) {
+          if (e.key === 'ArrowDown') { e.preventDefault(); updateActive(1); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); updateActive(-1); }
+          else if (e.key === 'Enter') {
+            e.preventDefault();
+            var items = list.querySelectorAll('.psel-item');
+            if (activeIndex >= 0 && items[activeIndex]) items[activeIndex].click();
+            else {
+              var q = search.value.trim().toLowerCase();
+              var first = enabled.find(function (p) { return (p.code || '').toLowerCase().indexOf(q) !== -1 || (p.name || '').toLowerCase().indexOf(q) !== -1; });
+              if (first) selectProduct(first);
+            }
+          } else if (e.key === 'Escape') { list.style.display = 'none'; activeIndex = -1; }
+        });
+        document.addEventListener('click', function (e) { if (!e.target.closest('#pSelSearch') && !e.target.closest('#pSelList')) { list.style.display = 'none'; activeIndex = -1; } });
+
+        // 默认选中第一个启用产品
+        if (enabled.length) { selectProduct(enabled[0]); }
+        else { loadParts(); }
+
         pb.querySelectorAll('[data-edit]').forEach(function (b) { b.onclick = function () { editProduct(ps.filter(function (x) { return x.id === b.getAttribute('data-edit'); })[0]); }; });
         pb.querySelectorAll('[data-del]').forEach(function (b) { b.onclick = function () { toggleProduct(b.getAttribute('data-del')); }; });
       });
