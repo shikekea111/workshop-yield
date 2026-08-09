@@ -1,5 +1,5 @@
 // sw.js - 离线缓存静态壳；数据请求（supabase.co）走网络优先、不缓存
-const CACHE = 'ws-yield-v5';
+const CACHE = 'ws-yield-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -29,6 +29,10 @@ self.addEventListener('activate', function (e) {
       return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
     }).then(function () { return self.clients.claim(); })
   );
+});
+
+self.addEventListener('message', function (e) {
+  if (e.data === 'skipWaiting') self.skipWaiting();
 });
 
 self.addEventListener('fetch', function (e) {
