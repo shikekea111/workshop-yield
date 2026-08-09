@@ -124,17 +124,24 @@ window.Employee = (function () {
     var today = Db._today();
     Db.listMyRecords(today).then(function (rows) {
       var total = (rows || []).reduce(function (a, r) { return a + (r.qty || 0); }, 0);
+      var d = new Date();
+      var wd = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
+      var n = rows ? rows.length : 0;
       view.innerHTML =
-        '<div class="card">' +
-          '<h2>👋 今天辛苦了</h2>' +
-          '<p class="muted">日期：' + today + '</p>' +
-          '<div class="score-row">' +
-            '<div class="score-big">' + (rows ? rows.length : 0) + '<span class="score-unit">条</span></div>' +
-            '<div class="score-meta"><div class="score-level">今日已报 ' + total + ' 件</div><div class="muted">点击下方按钮继续上报</div></div>' +
+        '<div class="emp-hero">' +
+          '<div class="eh-date">' + today + ' · ' + wd + '</div>' +
+          '<div class="eh-greet">👋 今天辛苦了</div>' +
+          '<div class="eh-stats">' +
+            '<div class="eh-stat"><div class="eh-num">' + n + '</div><div class="eh-lbl">已报工序</div></div>' +
+            '<div class="eh-div"></div>' +
+            '<div class="eh-stat"><div class="eh-num">' + total + '</div><div class="eh-lbl">总件数</div></div>' +
           '</div>' +
-          '<button class="btn" id="goAdd" style="margin-top:12px">＋ 新增上报</button>' +
         '</div>' +
-        '<div class="card"><h3>怎么用</h3><p class="muted">选产品 → 选工序 → 填数量 → 提交。工序由管理员预置，无需手输，避免写错。</p></div>';
+        '<button class="btn" id="goAdd">＋ 新增上报</button>' +
+        '<div class="card emp-tips">' +
+          '<div class="et-ico">💡</div>' +
+          '<div class="et-body"><b>怎么用</b><p class="muted">选产品 → 选工序 → 填数量 → 提交。工序由管理员预置，无需手输，避免写错。</p></div>' +
+        '</div>';
       document.getElementById('goAdd').addEventListener('click', openAdd);
     }).catch(function (e) {
       view.innerHTML = '<div class="empty"><div class="em-ico">⚠️</div>加载失败：' + esc(e.message || e) + '</div>';
@@ -195,11 +202,15 @@ window.Employee = (function () {
     var m0 = String(first.getMonth() + 1).padStart(2, '0');
     var d0 = String(first.getDate()).padStart(2, '0');
     var fromStr = first.getFullYear() + '-' + m0 + '-' + d0;
+    var acc = (App.profile.email || '').split('@')[0];
     view.innerHTML =
-      '<div class="card"><h2>👤 我的</h2>' +
-        '<p class="profile-line">账号：' + esc(App.profile.email) + '</p>' +
-        '<p class="profile-line">邮箱：' + esc(App.profile.email) + '</p>' +
-        '<p class="profile-line">角色：' + (App.profile.role === 'admin' ? '管理员' : '员工') + '</p>' +
+      '<div class="emp-profile">' +
+        '<div class="ep-avatar">' + esc(acc) + '</div>' +
+        '<div class="ep-info">' +
+          '<div class="ep-name">工号 ' + esc(acc) + '</div>' +
+          '<div class="ep-sub">' + esc(App.profile.email) + '</div>' +
+          '<div class="ep-role">' + (App.profile.role === 'admin' ? '管理员' : '员工') + '</div>' +
+        '</div>' +
       '</div>' +
       '<div class="card"><h3>历史上报</h3>' +
         '<div class="filters"><div class="field"><label>从</label><input id="hf" type="date" value="' + fromStr + '"></div>' +

@@ -205,3 +205,81 @@ table.tbl tfoot td { font-weight: 800; background: var(--bg); }
 .login-logo { text-align: center; font-size: 52px; }
 .login-title { text-align: center; font-size: 22px; font-weight: 800; margin: 8px 0 4px; }
 .login-sub { text-align: center; color: var(--text-soft); margin-bottom: 22px; }
+
+/* ============================================================
+   员工端专属美化（仅 body.app-emp 生效，管理端不受影响）
+   设计语言：沿用主色 #1d6fb8，新增蓝色渐变 hero、个人卡、精致列表
+   ============================================================ */
+body.app-emp { background: #eef3f8; }
+
+/* 顶部 hero 欢迎区（替换原灰色欢迎卡片） */
+.emp-hero {
+  background: linear-gradient(135deg, #2b7de0 0%, #155a96 100%);
+  border-radius: 20px; padding: 22px 20px 20px; margin-bottom: 14px;
+  box-shadow: 0 10px 26px rgba(21,90,150,.28); color: #fff;
+}
+.emp-hero .eh-date { font-size: 13px; opacity: .85; letter-spacing: .3px; }
+.emp-hero .eh-greet { font-size: 22px; font-weight: 800; margin: 6px 0 16px; }
+.emp-hero .eh-stats { display: flex; align-items: center; gap: 16px; }
+.emp-hero .eh-stat { flex: 1; text-align: center; }
+.emp-hero .eh-num { font-size: 34px; font-weight: 800; line-height: 1.1; }
+.emp-hero .eh-lbl { font-size: 13px; opacity: .85; margin-top: 2px; }
+.emp-hero .eh-div { width: 1px; height: 38px; background: rgba(255,255,255,.35); }
+
+/* 首页主按钮（更醒目） */
+body.app-emp .btn#goAdd { box-shadow: 0 8px 18px rgba(29,111,184,.28); margin-bottom: 14px; }
+
+/* 首页「怎么用」提示卡（图标 + 文字并排） */
+.emp-tips { display: flex; gap: 12px; align-items: flex-start; }
+.emp-tips .et-ico { font-size: 24px; flex: 0 0 auto; line-height: 1.2; }
+.emp-tips .et-body { flex: 1; }
+.emp-tips .et-body b { font-size: 15px; }
+.emp-tips .et-body p { margin: 4px 0 0; }
+
+/* 个人页个人卡 */
+.emp-profile {
+  display: flex; align-items: center; gap: 14px; background: #fff;
+  border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 16px; margin-bottom: 14px;
+}
+.emp-profile .ep-avatar {
+  flex: 0 0 auto; width: 60px; height: 60px; border-radius: 50%;
+  background: linear-gradient(135deg, #2b7de0, #155a96); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 800; box-shadow: 0 6px 14px rgba(21,90,150,.3);
+}
+.emp-profile .ep-info { flex: 1; min-width: 0; }
+.emp-profile .ep-name { font-size: 18px; font-weight: 800; }
+.emp-profile .ep-sub { font-size: 13px; color: var(--text-soft); margin-top: 2px; word-break: break-all; }
+.emp-profile .ep-role {
+  display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px; background: var(--primary-light); color: var(--primary-dark);
+}
+
+/* 列表项细节增强（今日 / 历史 通用） */
+body.app-emp .rec-item {
+  border-left: 4px solid var(--primary); padding-left: 14px;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+body.app-emp .rec-item:active { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,.1); }
+body.app-emp .rec-ico { background: var(--primary-light); }
+body.app-emp .rec-qty { color: var(--primary-dark); }
+
+/* 登录页精致感（员工端） */
+body.app-emp .login-wrap .card { border-radius: 20px; padding: 22px 18px; box-shadow: 0 10px 30px rgba(29,111,184,.12); }
+body.app-emp .login-logo { filter: drop-shadow(0 6px 10px rgba(29,111,184,.25)); }
+
+/* 空状态卡片化 */
+body.app-emp .empty {
+  background: #fff; border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 48px 16px; border: 1px dashed var(--line);
+}
+
+/* sheet 选择项：可点击反馈 + 右侧箭头（限定员工端，管理端不变） */
+body.app-emp .cand-item { align-items: center; transition: background .12s ease, transform .12s ease; }
+body.app-emp .cand-item::after { content: "›"; color: var(--text-soft); font-size: 22px; font-weight: 700; margin-left: auto; padding-left: 8px; }
+body.app-emp .cand-item:active { background: var(--primary-light); transform: scale(.99); }
+body.app-emp .cand-list .badge.process { display: none; } /* 箭头已表达“可点”语义 */
+
+/* 搜索框聚焦高亮（员工端） */
+body.app-emp .search-box input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(29,111,184,.12); }
+
