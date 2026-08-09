@@ -12,6 +12,17 @@ window.Employee = (function () {
     });
   }
 
+  // 将 UTC ISO 时间转北京时间（UTC+8）显示，不受浏览器时区设置影响
+  function fmtTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    var t = d.getTime() + d.getTimezoneOffset() * 60000 + 8 * 3600000;
+    var c = new Date(t);
+    var h = String(c.getHours()).padStart(2, '0');
+    var m = String(c.getMinutes()).padStart(2, '0');
+    return h + ':' + m;
+  }
+
   // ---------- 上报（同屏分步选择，避免嵌套弹层覆盖） ----------
   function openAdd() {
     curDraft = { product: null, part: null };
@@ -158,7 +169,7 @@ window.Employee = (function () {
         var pn = (r.parts && r.parts.part_name) ? r.parts.part_name : '';
         var pno = (r.parts && r.parts.part_no) ? r.parts.part_no : '';
         var pname = (r.products && r.products.name) ? r.products.name : '';
-        var time = (r.submitted_at || '').slice(11, 16);
+        var time = fmtTime(r.submitted_at);
         return '<div class="rec-item" data-id="' + r.id + '">' +
           '<div class="rec-ico">📦</div>' +
           '<div class="rec-body"><div class="rec-title">' + esc(pno) + ' · ' + esc(pn) + '</div>' +
