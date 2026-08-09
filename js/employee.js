@@ -126,7 +126,7 @@ window.Employee = (function () {
       var total = (rows || []).reduce(function (a, r) { return a + (r.qty || 0); }, 0);
       view.innerHTML =
         '<div class="card">' +
-          '<h2>👋 ' + esc(App.profile.display_name || '工友') + '，今天辛苦了</h2>' +
+          '<h2>👋 今天辛苦了</h2>' +
           '<p class="muted">日期：' + today + '</p>' +
           '<div class="score-row">' +
             '<div class="score-big">' + (rows ? rows.length : 0) + '<span class="score-unit">条</span></div>' +
@@ -197,7 +197,7 @@ window.Employee = (function () {
     var fromStr = first.getFullYear() + '-' + m0 + '-' + d0;
     view.innerHTML =
       '<div class="card"><h2>👤 我的</h2>' +
-        '<p class="profile-line">姓名：' + esc(App.profile.display_name) + '</p>' +
+        '<p class="profile-line">账号：' + esc(App.profile.email) + '</p>' +
         '<p class="profile-line">邮箱：' + esc(App.profile.email) + '</p>' +
         '<p class="profile-line">角色：' + (App.profile.role === 'admin' ? '管理员' : '员工') + '</p>' +
       '</div>' +

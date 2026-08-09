@@ -40,7 +40,7 @@ window.Admin = (function () {
     });
     Db.listWorkers().then(function (ws) {
       var sel = document.getElementById('rw');
-      (ws || []).forEach(function (w) { sel.insertAdjacentHTML('beforeend', '<option value="' + w.id + '">' + esc(w.display_name) + '</option>'); });
+      (ws || []).forEach(function (w) { sel.insertAdjacentHTML('beforeend', '<option value="' + w.id + '">' + esc(String(w.email).split('@')[0]) + '</option>'); });
     });
 
     document.getElementById('rq').addEventListener('click', runReport);
@@ -61,7 +61,7 @@ window.Admin = (function () {
     Promise.all([Db.listAllProducts(), Db.listAllParts(), Db.listWorkers()]).then(function (res) {
       (res[0] || []).forEach(function (p) { prodMap[p.id] = { code: p.code, name: p.name }; });
       (res[1] || []).forEach(function (p) { partMap[p.id] = { no: p.part_no, name: p.part_name, process: p.process }; });
-      (res[2] || []).forEach(function (w) { workerMap[w.id] = w.display_name; });
+      (res[2] || []).forEach(function (w) { workerMap[w.id] = String(w.email).split('@')[0]; });
       return Db.reportSummary(f);
     }).then(function (rows) {
       lastRows = rows || [];
@@ -229,12 +229,12 @@ window.Admin = (function () {
     var view = document.getElementById('view');
     view.innerHTML =
       '<div class="card"><div class="row-between"><h2>🧑‍🔧 员工账号</h2><div><button class="btn sm" id="batchW">批量录入</button> <button class="btn sm" id="addW">+ 创建员工</button></div></div>' +
-        '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>姓名</th><th>邮箱</th><th>状态</th><th>操作</th></tr></thead><tbody id="wbody"></tbody></table></div>' +
+        '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>工号</th><th>邮箱</th><th>状态</th><th>操作</th></tr></thead><tbody id="wbody"></tbody></table></div>' +
         '<p class="muted">初始密码由管理员设定，员工首次登录后在「我的」修改。</p>' +
       '</div>';
     Db.listWorkers().then(function (ws) {
       document.getElementById('wbody').innerHTML = (ws || []).map(function (w) {
-        return '<tr><td>' + esc(w.display_name) + (w.role === 'admin' ? '（管理员）' : '') + '</td><td>' + esc(w.email) + '</td><td>' + (w.disabled ? '<span class="badge off">已禁用</span>' : '<span class="badge ok">正常</span>') + '</td>' +
+        return '<tr><td>' + esc(String(w.email).split('@')[0]) + (w.role === 'admin' ? '（管理员）' : '') + '</td><td>' + esc(w.email) + '</td><td>' + (w.disabled ? '<span class="badge off">已禁用</span>' : '<span class="badge ok">正常</span>') + '</td>' +
           '<td><button class="btn sm ' + (w.disabled ? '' : 'danger') + '" data-toggle="' + w.id + '">' + (w.disabled ? '启用' : '禁用') + '</button></td></tr>';
       }).join('') || '<tr><td colspan="4" class="center-note">暂无员工</td></tr>';
       document.getElementById('wbody').querySelectorAll('[data-toggle]').forEach(function (b) {
@@ -249,13 +249,14 @@ window.Admin = (function () {
     document.getElementById('batchW').onclick = openBatchImport;
 
     document.getElementById('addW').onclick = function () {
-      UI.modal('创建员工', '<div class="field"><label>姓名</label><input id="wn" placeholder="如 张三"></div><div class="field"><label>邮箱（作为账号）</label><input id="we" type="email" placeholder="zhangsan@factory.com"></div><div class="field"><label>初始密码</label><input id="wp" type="password" placeholder="至少6位"></div>', {
+      UI.modal('创建员工', '<div class="field"><label>工号/账号前缀（可不填姓名）</label><input id="wn" placeholder="如 1001"></div><div class="field"><label>邮箱（作为账号）</label><input id="we" type="email" placeholder="1001@factory.local"></div><div class="field"><label>初始密码</label><input id="wp" type="password" placeholder="至少6位"></div>', {
         center: true, okText: '创建',
         onOk: function () {
           var name = document.getElementById('wn').value.trim();
           var email = document.getElementById('we').value.trim();
           var pw = document.getElementById('wp').value;
-          if (!name || !email || pw.length < 6) { UI.toast('请填完整（密码≥6位）', true); return; }
+          if (!email || pw.length < 6) { UI.toast('请填邮箱和初始密码（≥6位）', true); return; }
+          if (!name) name = String(email).split('@')[0];   // 不绑定姓名时，display_name 默认用账号前缀
           Db.createWorker(email, pw, name).then(function () { UI.close(); UI.toast('员工已创建'); renderWorkers(); })
             .catch(function (e) { UI.toast('创建失败：' + (e.message || e) + '（若提示 forbidden，请确认当前账号为管理员；部分 Supabase 版本需用后台手动建号）', true); });
         }
@@ -267,8 +268,8 @@ window.Admin = (function () {
   function openBatchImport() {
     var domain = (window.APP_CONFIG && window.APP_CONFIG.EMAIL_DOMAIN) || 'factory.local';
     var body =
-      '<p class="muted" style="margin-top:0">两种方式任选其一：① 在 Excel 里选中「工号、姓名」两列（可加第三列初始密码），直接 <b>复制粘贴</b> 到下方文本框；② 点「选择文件」上传 CSV/TSV。<br>账号自动生成为 <code>工号@' + esc(domain) + '</code>，员工用此账号登录。表中如含「工号/姓名」表头行会自动跳过。</p>' +
-      '<div class="field"><label>粘贴数据（每行：工号, 姓名, 密码可选）</label>' +
+      '<p class="muted" style="margin-top:0">两种方式任选其一：① 在 Excel 里选中「工号」一列（姓名可选，可加第二/三列初始密码），直接 <b>复制粘贴</b> 到下方文本框；② 点「选择文件」上传 CSV/TSV。<br>账号自动生成为 <code>工号@' + esc(domain) + '</code>，员工用此账号登录。表中如含「工号/姓名」表头行会自动跳过。姓名留空时默认用工号显示，应用不再体现姓名。</p>' +
+      '<div class="field"><label>粘贴数据（每行：工号, 姓名可选, 密码可选）</label>' +
         '<textarea id="biTxt" placeholder="1001\t张三\t123456&#10;1002\t李四&#10;（也可逗号分隔，密码列可留空）"></textarea></div>' +
       '<div class="field"><label>或上传文件（.csv / .txt / .tsv）</label>' +
         '<input id="biFile" type="file" accept=".csv,.txt,.tsv"></div>' +
@@ -304,8 +305,8 @@ window.Admin = (function () {
         else if (line.indexOf(',') >= 0) parts = line.split(',');
         else parts = line.split(/\s+/);
         parts = parts.map(function (p) { return p.trim(); }).filter(function (p) { return p.length > 0; });
-        if (parts.length < 2) return;
-        if (idx === 0 && /工号|姓名|编号|名称|密码|email|name/i.test(parts[0] + ' ' + parts[1])) return; // 跳过表头
+        if (parts.length < 1) return;
+        if (idx === 0 && /工号|姓名|编号|名称|密码|email|name/i.test(parts[0] + ' ' + (parts[1] || ''))) return; // 跳过表头
         rows.push({ empId: parts[0], name: parts[1], pwd: parts[2] || '' });
       });
       return rows;
@@ -315,18 +316,18 @@ window.Admin = (function () {
       var prev = document.getElementById('biPrev');
       var runBtn = document.getElementById('biRun');
       if (!rows.length) {
-        prev.innerHTML = '<p class="ocr-error">未解析到数据，请检查格式（每行至少 工号 和 姓名 两列）。</p>';
+        prev.innerHTML = '<p class="ocr-error">未解析到数据，请检查格式（每行至少 工号 一列，姓名/密码可选）。</p>';
         runBtn.style.display = 'none';
         return;
       }
       var newCount = 0, existCount = 0;
-      var html = '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>工号</th><th>姓名</th><th>登录账号</th><th>初始密码</th><th>状态</th></tr></thead><tbody>';
+      var html = '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>工号</th><th>姓名（可选）</th><th>登录账号</th><th>初始密码</th><th>状态</th></tr></thead><tbody>';
       rows.forEach(function (r) {
         var email = buildEmail(r.empId);
         var pwd = r.pwd || defaultPwd || r.empId;
         var exist = !!existingEmails[email];
         if (exist) existCount++; else newCount++;
-        html += '<tr><td>' + esc(r.empId) + '</td><td>' + esc(r.name) + '</td><td>' + esc(email) + '</td><td>' + esc(pwd) + '</td><td>' +
+        html += '<tr><td>' + esc(r.empId) + '</td><td>' + esc(r.name || r.empId) + '</td><td>' + esc(email) + '</td><td>' + esc(pwd) + '</td><td>' +
           (exist ? '<span class="badge off">已存在</span>' : '<span class="badge ok">新建</span>') + '</td></tr>';
       });
       html += '</tbody></table></div>';
@@ -388,7 +389,7 @@ window.Admin = (function () {
     var view = document.getElementById('view');
     view.innerHTML =
       '<div class="card"><h2>⚙️ 设置</h2>' +
-        '<p class="profile-line">管理员：' + esc(App.profile.display_name) + '</p>' +
+        '<p class="profile-line">账号：' + esc(App.profile.email) + '</p>' +
         '<p class="profile-line">邮箱：' + esc(App.profile.email) + '</p>' +
         '<a class="btn ghost" href="index.html" style="margin-top:8px;text-decoration:none;display:block">打开员工上报端</a>' +
         '<button class="btn danger" id="logout" style="margin-top:10px">退出登录</button>' +
