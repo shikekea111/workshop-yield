@@ -142,7 +142,7 @@ window.Admin = (function () {
   function renderProducts() {
     var view = document.getElementById('view');
     view.innerHTML =
-      '<div class="card"><div class="row-between"><h2>📦 产品</h2><button class="btn sm" id="addP">+ 新增产品</button></div>' +
+      '<div class="card"><div class="row-between"><h2>📦 产品</h2><div><button class="btn sm" id="batchP">批量录入</button> <button class="btn sm" id="addP">+ 新增产品</button></div></div>' +
         '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>编号</th><th>名称</th><th>状态</th><th>操作</th></tr></thead><tbody id="pbody"></tbody></table></div>' +
       '</div>' +
       '<div class="card"><div class="row-between"><h2>🔩 工序</h2><button class="btn sm" id="addPt">+ 新增工序</button></div>' +
@@ -182,6 +182,7 @@ window.Admin = (function () {
     }
 
     document.getElementById('addP').onclick = editProduct;
+    document.getElementById('batchP').onclick = openBatchImportProducts;
     document.getElementById('addPt').onclick = function () {
       var pid = document.getElementById('pSel').value;
       if (!pid) { UI.toast('请先在上方选择产品', true); return; }
@@ -222,6 +223,141 @@ window.Admin = (function () {
   }
   function togglePart(id) {
     Db.deletePart(id).then(function () { UI.toast('已更新'); renderProducts(); }).catch(function (e) { UI.toast('操作失败：' + (e.message || e), true); });
+  }
+
+  // ---------------- 批量录入产品工序 ----------------
+  // 数据格式（每行一条工序，产品信息可重复；从 Excel 复制粘贴即可）：
+  //   产品编号, 产品名称, 工序号, 工序名
+  //   例：BED-001, 单人充气床, 10, 裁布
+  // 支持 TAB / 逗号 / 中文逗号 分隔；含「产品编号/工序号」字样的一行视为表头自动跳过。
+  function openBatchImportProducts() {
+    var body =
+      '<p class="muted" style="margin-top:0">在 Excel 里选中「产品编号、产品名称、工序号、工序名」四列（每个产品的 20~30 道工序各占一行，产品编号/名称可重复），直接 <b>复制粘贴</b> 到下方；或上传 CSV 文件。<br>系统会自动按「产品编号」归集产品、按「产品+工序号」去重，重复运行只更新不会重复建。</p>' +
+      '<div class="field"><label>粘贴数据（每行：产品编号, 产品名称, 工序号, 工序名）</label>' +
+        '<textarea id="bpTxt" placeholder="BED-001\t单人充气床\t10\t裁布&#10;BED-001\t单人充气床\t20\t缝纫&#10;BED-002\t双人充气床\t10\t裁布"></textarea></div>' +
+      '<div class="field"><label>或上传文件（.csv / .txt / .tsv）</label>' +
+        '<input id="bpFile" type="file" accept=".csv,.txt,.tsv"></div>' +
+      '<button class="btn secondary" id="bpParse">解析预览</button>' +
+      '<div id="bpPrev" style="margin-top:12px"></div>' +
+      '<button class="btn" id="bpRun" style="margin-top:12px;display:none">开始导入</button>' +
+      '<button class="btn ghost" id="bpClose" style="margin-top:10px">关闭</button>';
+
+    UI.modal('批量录入产品工序', body, { center: true, hideActions: true });
+    document.getElementById('bpClose').onclick = UI.close;
+
+    var pending = [];
+
+    function parse(text) {
+      var lines = text.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+      var rows = [];
+      lines.forEach(function (line, idx) {
+        var parts;
+        if (line.indexOf('\t') >= 0) parts = line.split('\t');
+        else if (line.indexOf('，') >= 0) parts = line.split('，');
+        else if (line.indexOf(',') >= 0) parts = line.split(',');
+        else parts = line.split(/\s+/);
+        parts = parts.map(function (p) { return p.trim(); }).filter(function (p) { return p.length > 0; });
+        if (parts.length < 3) return; // 至少要 产品编号 + 工序号 + 工序名
+        // 跳过表头
+        if (idx === 0 && /产品编号|产品名称|工序号|工序名|编号|名称|part/i.test(parts.join(' '))) return;
+        var code, name, partNo, partName;
+        if (parts.length >= 4) {
+          code = parts[0]; name = parts[1]; partNo = parts[2]; partName = parts[3];
+        } else {
+          // 只有3列：产品编号, 工序号, 工序名（产品名称默认用编号）
+          code = parts[0]; name = ''; partNo = parts[1]; partName = parts[2];
+        }
+        rows.push({ code: code, name: name || code, part_no: partNo, part_name: partName });
+      });
+      return rows;
+    }
+
+    function renderPreview(rows) {
+      var prev = document.getElementById('bpPrev');
+      var runBtn = document.getElementById('bpRun');
+      if (!rows.length) {
+        prev.innerHTML = '<p class="ocr-error">未解析到数据，请检查格式：每行至少「产品编号、工序号、工序名」三列（产品名称可选）。</p>';
+        runBtn.style.display = 'none';
+        return;
+      }
+      // 产品去重
+      var prodSeen = {}, prodCount = 0;
+      rows.forEach(function (r) {
+        if (!prodSeen[r.code]) { prodSeen[r.code] = true; prodCount++; }
+      });
+      // 工序去重
+      var partSeen = {}, partCount = 0;
+      rows.forEach(function (r) {
+        var k = r.code + '|' + r.part_no;
+        if (!partSeen[k]) { partSeen[k] = true; partCount++; }
+      });
+      var html = '<div class="card"><p style="margin:0"><b>解析结果</b>：产品 ' + prodCount + ' 个，工序 ' + partCount + ' 条。</p>' +
+        '<p class="muted" style="margin:6px 0 0">前 5 行预览：</p></div>' +
+        '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>产品编号</th><th>产品名称</th><th>工序号</th><th>工序名</th></tr></thead><tbody>';
+      rows.slice(0, 5).forEach(function (r) {
+        html += '<tr><td>' + esc(r.code) + '</td><td>' + esc(r.name) + '</td><td>' + esc(r.part_no) + '</td><td>' + esc(r.part_name) + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+      prev.innerHTML = html;
+      runBtn.style.display = 'block';
+      runBtn.textContent = '开始导入（产品 ' + prodCount + ' + 工序 ' + partCount + '）';
+    }
+
+    document.getElementById('bpFile').addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () { document.getElementById('bpTxt').value = fr.result; UI.toast('文件已读取，点「解析预览」'); };
+      fr.onerror = function () { UI.toast('读取失败', true); };
+      fr.readAsText(f, 'UTF-8');
+    });
+
+    document.getElementById('bpParse').addEventListener('click', function () {
+      var text = document.getElementById('bpTxt').value;
+      if (!text.trim()) { UI.toast('请先粘贴或上传数据', true); return; }
+      pending = parse(text);
+      renderPreview(pending);
+    });
+
+    document.getElementById('bpRun').addEventListener('click', function () {
+      if (!pending.length) return;
+      var btn = document.getElementById('bpRun');
+      btn.disabled = true;
+      btn.textContent = '导入中…';
+
+      // 1) 产品去重后批量 upsert（按 code 幂等），取回 code->id 映射
+      var prodMap = {};
+      pending.forEach(function (r) {
+        if (!prodMap[r.code]) prodMap[r.code] = { code: r.code, name: r.name };
+        else if (r.name && r.name !== r.code && (prodMap[r.code].name === r.code || !prodMap[r.code].name)) {
+          prodMap[r.code].name = r.name; // 取更完整的名称
+        }
+      });
+      var products = Object.keys(prodMap).map(function (k) { return prodMap[k]; });
+
+      Db.upsertProductsBatch(products).then(function (savedProducts) {
+        var codeToId = {};
+        (savedProducts || []).forEach(function (p) { codeToId[p.code] = p.id; });
+        // 2) 工序去重后批量 upsert（按 product_id+part_no 幂等）
+        var seen = {}, parts = [];
+        pending.forEach(function (r) {
+          var pid = codeToId[r.code];
+          if (!pid) return;
+          var k = r.code + '|' + r.part_no;
+          if (seen[k]) return;
+          seen[k] = true;
+          parts.push({ product_id: pid, part_no: r.part_no, part_name: r.part_name, process: r.part_name });
+        });
+        return Db.upsertPartsBatch(parts).then(function (savedParts) {
+          UI.toast('导入完成：产品 ' + (savedProducts || []).length + ' 个，工序 ' + (savedParts || []).length + ' 条');
+          UI.close();
+          renderProducts();
+        });
+      }).catch(function (e) {
+        btn.disabled = false;
+        UI.toast('导入失败：' + (e.message || e), true);
+      });
+    });
   }
 
   // ---------------- 员工 ----------------

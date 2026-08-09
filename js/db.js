@@ -74,6 +74,14 @@
       upsertPart: function (p) {
         return client.from('parts').upsert(p).select().then(function (r) { if (r.error) throw r.error; return r.data; });
       },
+      // 批量主数据写入（按业务键幂等 upsert，重复运行不会重复建）：
+      //   产品按 code 去重；工序按 (product_id, part_no) 去重
+      upsertProductsBatch: function (rows) {
+        return client.from('products').upsert(rows, { onConflict: 'code' }).select().then(function (r) { if (r.error) throw r.error; return r.data; });
+      },
+      upsertPartsBatch: function (rows) {
+        return client.from('parts').upsert(rows, { onConflict: 'product_id,part_no' }).select().then(function (r) { if (r.error) throw r.error; return r.data; });
+      },
       deletePart: function (id) {
         return client.from('parts').update({ enabled: false }).eq('id', id).then(function (r) { if (r.error) throw r.error; });
       },
