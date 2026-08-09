@@ -1,0 +1,19 @@
+{
+  "name": "车间产量上报",
+  "short_name": "产量上报",
+  "description": "车间员工手机端上报每日产量，后台自动汇总统计",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f5f8",
+  "theme_color": "#1d6fb8",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

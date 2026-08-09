@@ -1,0 +1,28 @@
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Node (if any local tooling added later)
+node_modules/
+
+# Local secrets / env
+.env
+.env.*
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Supabase local dev artifacts (if added later)
+.supabase/
+
+# 临时诊断/API 响应文件（部署脚本可能生成）
+create*.json
+pages*.json
+*_resp.json
