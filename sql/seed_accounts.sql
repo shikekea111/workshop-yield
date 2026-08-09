@@ -12,7 +12,7 @@ declare
   v_pwd   text := '123456';          -- 新账号统一初始密码（按需修改）
   new_id  uuid;
   col     text;
-  email   text;
+  v_email text;
   i       int;
 begin
   -- ============================================================
@@ -63,8 +63,8 @@ begin
   -- ② 批量新建 1004~1500（跳过已存在的）
   -- ============================================================
   for i in 1004..1500 loop
-    email := i::text || '@factory.local';
-    if exists (select 1 from auth.users where auth.users.email = email) then
+    v_email := i::text || '@factory.local';
+    if exists (select 1 from auth.users where auth.users.email = v_email) then
       continue;
     end if;
 
@@ -74,7 +74,7 @@ begin
       (instance_id, id, aud, email, encrypted_password, email_confirmed_at,
        raw_app_meta_data, raw_user_meta_data, role)
     values
-      ('00000000-0000-0000-0000-000000000000', new_id, 'authenticated', email,
+      ('00000000-0000-0000-0000-000000000000', new_id, 'authenticated', v_email,
        extensions.crypt(v_pwd, extensions.gen_salt('bf', 10)), now(),
        '{"provider":"email","providers":["email"]}'::jsonb,
        jsonb_build_object('display_name', i::text), 'authenticated');
@@ -93,14 +93,14 @@ begin
     -- 2c. identities 行
     insert into auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
     values (gen_random_uuid(), new_id,
-      jsonb_build_object('sub', new_id::text, 'email', email,
+      jsonb_build_object('sub', new_id::text, 'email', v_email,
                          'email_verified', true, 'phone_verified', false),
       'email', new_id::text, now(), now())
     on conflict (provider, provider_id) do nothing;
 
     -- 2d. profiles（display_name = 工号）
     insert into public.profiles (id, email, display_name, role)
-    values (new_id, email, i::text, 'worker')
+    values (new_id, v_email, i::text, 'worker')
     on conflict (id) do nothing;
   end loop;
 
