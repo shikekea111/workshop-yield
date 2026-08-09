@@ -24,26 +24,43 @@ window.App = { mode: 'emp', session: null, profile: null, currentTab: null };
     var tabbar = document.getElementById('tabbar');
     if (tabbar) tabbar.style.display = 'none';
     var view = document.getElementById('view');
+    // 员工端：只输工号数字，自动补 @factory.local；管理员端：完整邮箱
+    var emailField = (App.mode === 'admin')
+      ? '<div class="field"><label>邮箱</label><input id="lgEmail" type="email" placeholder="管理员账号邮箱" autocomplete="username" /></div>'
+      : '<div class="field"><label>工号</label>' +
+          '<div class="input-suffix">' +
+            '<input id="lgEmail" type="text" inputmode="numeric" placeholder="如 1004" autocomplete="username" />' +
+            '<span class="suffix">@' + (window.APP_CONFIG.EMAIL_DOMAIN || 'factory.local') + '</span>' +
+          '</div></div>';
+    var hint = (App.mode === 'admin')
+      ? '账号由管理员创建。首次登录后可在「我的」修改密码。'
+      : '只需输入工号，域名自动补全。首次登录后可在「我的」修改密码。';
     view.innerHTML =
       '<div class="login-wrap">' +
         '<div class="login-logo">🏭</div>' +
         '<div class="login-title">' + (window.APP_CONFIG.APP_NAME || '车间产量上报') + '</div>' +
         '<div class="login-sub">' + (App.mode === 'admin' ? '管理后台登录' : '员工登录') + '</div>' +
         '<div class="card">' +
-          '<div class="field"><label>邮箱</label><input id="lgEmail" type="email" placeholder="员工账号邮箱" /></div>' +
+          emailField +
           '<div class="field"><label>密码</label><input id="lgPw" type="password" placeholder="密码" /></div>' +
           '<button class="btn" id="loginBtn">登录</button>' +
-          '<p class="muted" style="margin-top:10px">账号由管理员创建。首次登录后可在「我的」修改密码。</p>' +
+          '<p class="muted" style="margin-top:10px">' + hint + '</p>' +
         '</div>' +
       '</div>';
     document.getElementById('loginBtn').addEventListener('click', doLogin);
     document.getElementById('lgPw').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+    var eEl = document.getElementById('lgEmail');
+    if (eEl) { eEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); }); eEl.focus(); }
   }
 
   function doLogin() {
-    var email = document.getElementById('lgEmail').value.trim();
+    var raw = document.getElementById('lgEmail').value.trim();
     var pw = document.getElementById('lgPw').value;
-    if (!email || !pw) { UI.toast('请输入邮箱和密码', true); return; }
+    if (!raw || !pw) { UI.toast('请输入账号和密码', true); return; }
+    // 员工端：只输了工号数字时，自动补 @factory.local（已是完整邮箱或管理员邮箱则不动）
+    var email = (App.mode === 'emp' && raw.indexOf('@') < 0)
+      ? raw + '@' + (window.APP_CONFIG.EMAIL_DOMAIN || 'factory.local')
+      : raw;
     UI.toast('登录中…');
     Db.signIn(email, pw).then(function (data) {
       App.session = (data && data.session) ? data.session : null;

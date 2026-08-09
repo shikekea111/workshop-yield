@@ -79,6 +79,16 @@ input[type="text"], input[type="date"], input[type="number"], input[type="time"]
 }
 textarea { resize: vertical; min-height: 76px; }
 
+/* 带后缀的输入框（如 工号 + @factory.local），手机大字体友好 */
+.input-suffix { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 10px; background: #fff; overflow: hidden; }
+.input-suffix input { flex: 1 1 auto; width: auto; border: none; border-radius: 0; }
+.input-suffix input:focus { outline: none; box-shadow: none; }
+.input-suffix .suffix {
+  flex: 0 0 auto; display: flex; align-items: center; padding: 0 12px;
+  font-size: 16px; color: var(--text-soft); background: #f3f4f6; white-space: nowrap;
+  border-left: 1px solid var(--line);
+}
+
 /* Selected display (大号只读展示已选的产品/零件) */
 .selbox {
   border: 1px dashed var(--primary); background: var(--primary-light);
