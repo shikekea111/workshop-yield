@@ -44,6 +44,7 @@ create table if not exists public.production_records (
   product_id uuid not null references products(id),
   part_id uuid not null references parts(id),
   process text,                         -- 冗余存储工序名，允许为空
+  shift text,                           -- 班次：白班 / 中班 / 夜班；历史数据可能为 NULL
   qty int not null check (qty > 0),
   record_date date not null default current_date,  -- 业务日期（哪天做的）
   submitted_at timestamptz not null default now(),
@@ -65,8 +66,8 @@ create index if not exists idx_rec_worker on public.production_records(worker_id
 create index if not exists idx_rec_product on public.production_records(product_id);
 create index if not exists idx_rec_part on public.production_records(part_id);
 create index if not exists idx_rec_date_worker on public.production_records(record_date, worker_id);
--- 汇总报表专用覆盖索引：过滤+分组+聚合列一次走 Index Only Scan，避免回表
-create index if not exists idx_rec_report on public.production_records (record_date, product_id, part_id, worker_id) include (qty, process);
+-- 汇总报表专用覆盖索引：过滤+分组+聚合列一次走 Index Only Scan，避免回表（含 shift 班次维度）
+create index if not exists idx_rec_report on public.production_records (record_date, product_id, part_id, worker_id, shift) include (qty, process);
 
 -- ============================================================
 -- 权限（Row Level Security）
@@ -142,19 +143,20 @@ create or replace function public.report_summary(
   product_id uuid,
   part_id uuid,
   worker_id uuid,
+  shift text,
   total_qty bigint
 ) language plpgsql security definer set search_path = public as $$
 begin
   if not public.is_admin() then raise exception 'forbidden'; end if;
   return query
-  select r.record_date, r.product_id, r.part_id, r.worker_id, sum(r.qty) as total_qty
+  select r.record_date, r.product_id, r.part_id, r.worker_id, r.shift, sum(r.qty) as total_qty
   from public.production_records r
   where (f_from is null or r.record_date >= f_from)
     and (f_to is null or r.record_date <= f_to)
     and (f_product is null or r.product_id = f_product)
     and (f_worker is null or r.worker_id = f_worker)
-  group by r.record_date, r.product_id, r.part_id, r.worker_id
-  order by r.record_date desc, r.product_id, r.part_id, r.worker_id;
+  group by r.record_date, r.product_id, r.part_id, r.worker_id, r.shift
+  order by r.record_date desc, r.product_id, r.part_id, r.worker_id, r.shift;
 end; $$;
 
 -- ============================================================

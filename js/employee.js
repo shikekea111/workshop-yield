@@ -23,9 +23,17 @@ window.Employee = (function () {
     return h + ':' + m;
   }
 
+  // 按员工手机当前小时预选班次（国内即北京时间；点选可改）
+  function guessShift() {
+    var h = new Date().getHours();
+    if (h >= 8 && h < 16) return '白班';
+    if (h >= 16) return '中班';
+    return '夜班'; // 0-8 点
+  }
+
   // ---------- 上报（同屏分步选择，避免嵌套弹层覆盖） ----------
   function openAdd() {
-    curDraft = { product: null, part: null };
+    curDraft = { product: null, part: null, shift: null };
     UI.sheet('上报产量', '', function (bodyEl, close) {
       curDraft._body = bodyEl; curDraft._close = close;
       step('product');
@@ -65,11 +73,28 @@ window.Employee = (function () {
       body.innerHTML =
         '<div class="selbox" id="bProd"><div class="sb-label">产品</div><div class="sb-value">' + esc(curDraft.product.code) + ' ' + esc(curDraft.product.name) + '</div></div>' +
         '<div class="selbox" id="bPart"><div class="sb-label">工序</div><div class="sb-value">' + esc(curDraft.part.part_no) + ' · ' + esc(curDraft.part.part_name) + '</div></div>' +
+        '<div class="field"><label>班次</label><div class="shift-pick" id="shiftPick">' +
+          '<div class="shift-chip" data-shift="白班">☀️ 白班</div>' +
+          '<div class="shift-chip" data-shift="中班">🌙 中班</div>' +
+          '<div class="shift-chip" data-shift="夜班">🌃 夜班</div>' +
+        '</div><p class="muted" style="margin:4px 0 0">默认按当前时间预选，可点改</p></div>' +
         '<div class="field"><label>生产数量</label><input id="qty" type="number" min="1" inputmode="numeric" placeholder="请输入数量"></div>' +
         '<button class="btn" id="submitRec">提交</button>';
       body.querySelector('#bProd').addEventListener('click', function () { step('product'); });
       body.querySelector('#bPart').addEventListener('click', function () { step('part'); });
       body.querySelector('#submitRec').addEventListener('click', submit);
+      // 班次选择
+      var sp = body.querySelector('#shiftPick');
+      sp.querySelectorAll('.shift-chip').forEach(function (c) {
+        c.addEventListener('click', function () {
+          curDraft.shift = c.getAttribute('data-shift');
+          sp.querySelectorAll('.shift-chip').forEach(function (x) { x.classList.toggle('on', x === c); });
+        });
+      });
+      // 预选当前班次
+      var pre = guessShift();
+      curDraft.shift = pre;
+      sp.querySelectorAll('.shift-chip').forEach(function (c) { if (c.getAttribute('data-shift') === pre) c.classList.add('on'); });
     }
   }
 
@@ -107,6 +132,7 @@ window.Employee = (function () {
     var qty = parseInt(document.getElementById('qty').value, 10);
     if (!curDraft.product) { UI.toast('请选择产品', true); return; }
     if (!curDraft.part) { UI.toast('请选择工序', true); return; }
+    if (!curDraft.shift) { UI.toast('请选择班次', true); return; }
     if (!qty || qty <= 0) { UI.toast('请输入正确数量', true); return; }
     UI.toast('提交中…');
     Db.insertRecord({
@@ -114,6 +140,7 @@ window.Employee = (function () {
       product_id: curDraft.product.id,
       part_id: curDraft.part.id,
       process: curDraft.part.part_name,
+      shift: curDraft.shift,
       qty: qty,
       record_date: Db._today()
     }).then(function () {
@@ -173,7 +200,7 @@ window.Employee = (function () {
         return '<div class="rec-item" data-id="' + r.id + '">' +
           '<div class="rec-ico">📦</div>' +
           '<div class="rec-body"><div class="rec-title">' + esc(pno) + ' · ' + esc(pn) + '</div>' +
-          '<div class="rec-sub">' + esc(pname) + '　' + time + '</div></div>' +
+          '<div class="rec-sub">' + esc(pname) + '　' + time + (r.shift ? '　<span class="shift-tag">' + esc(r.shift) + '</span>' : '') + '</div></div>' +
           '<div class="rec-qty">' + r.qty + ' 件</div>' +
           '<div class="rec-actions"><button class="icon-btn" data-act="edit" title="修改">✏️</button><button class="icon-btn" data-act="del" title="删除">🗑️</button></div>' +
           '</div>';
@@ -197,13 +224,29 @@ window.Employee = (function () {
   }
 
   function doEdit(rec) {
-    UI.sheet('修改上报', '<div class="field"><label>数量（原 ' + rec.qty + ' 件）</label><input id="eqty" type="number" min="1" inputmode="numeric" value="' + rec.qty + '"></div><button class="btn" id="esave">保存</button>', function (body, close) {
-      body.querySelector('#esave').addEventListener('click', function () {
-        var q = parseInt(body.querySelector('#eqty').value, 10);
-        if (!q || q <= 0) { UI.toast('请输入正确数量', true); return; }
-        Db.updateRecord(rec.id, { qty: q }).then(function () { UI.toast('已保存'); close(); renderToday(); }).catch(function (e) { UI.toast('保存失败：' + (e.message || e), true); });
+    UI.sheet('修改上报',
+      '<div class="field"><label>数量（原 ' + rec.qty + ' 件）</label><input id="eqty" type="number" min="1" inputmode="numeric" value="' + rec.qty + '"></div>' +
+      '<div class="field"><label>班次</label><div class="shift-pick" id="eshiftPick">' +
+        '<div class="shift-chip" data-shift="白班">☀️ 白班</div>' +
+        '<div class="shift-chip" data-shift="中班">🌙 中班</div>' +
+        '<div class="shift-chip" data-shift="夜班">🌃 夜班</div>' +
+      '</div></div>' +
+      '<button class="btn" id="esave">保存</button>', function (body, close) {
+        var editShift = rec.shift || guessShift();
+        function selectShift(val) {
+          editShift = val;
+          body.querySelectorAll('#eshiftPick .shift-chip').forEach(function (c) { c.classList.toggle('on', c.getAttribute('data-shift') === val); });
+        }
+        body.querySelectorAll('#eshiftPick .shift-chip').forEach(function (c) {
+          c.addEventListener('click', function () { selectShift(c.getAttribute('data-shift')); });
+        });
+        selectShift(editShift);
+        body.querySelector('#esave').addEventListener('click', function () {
+          var q = parseInt(body.querySelector('#eqty').value, 10);
+          if (!q || q <= 0) { UI.toast('请输入正确数量', true); return; }
+          Db.updateRecord(rec.id, { qty: q, shift: editShift }).then(function () { UI.toast('已保存'); close(); renderToday(); }).catch(function (e) { UI.toast('保存失败：' + (e.message || e), true); });
+        });
       });
-    });
   }
 
   function renderMe() {

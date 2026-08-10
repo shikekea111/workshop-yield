@@ -1,11 +1,11 @@
 // sw.js - 离线缓存静态壳；数据请求（supabase.co）走网络优先、不缓存
-const CACHE = 'ws-yield-v8';
+const CACHE = 'ws-yield-v9';
 const ASSETS = [
   './',
   './index.html',
   './admin.html',
   './manifest.webmanifest',
-  './css/styles.css?v=6',
+  './css/styles.css?v=7',
   './js/config.js',
   './js/db.js',
   './js/ui.js',

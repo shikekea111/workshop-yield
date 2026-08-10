@@ -31,7 +31,7 @@ window.Admin = (function () {
       '</div>' +
       '<div id="board"></div>' +
       '<div class="tbl-wrap"><table class="tbl" id="rtbl"><thead><tr>' +
-        '<th>日期</th><th>产品编号</th><th>产品名</th><th>工序号</th><th>工序名</th><th>员工</th><th>数量</th>' +
+        '<th>日期</th><th>产品编号</th><th>产品名</th><th>工序号</th><th>工序名</th><th>员工</th><th>班次</th><th>数量</th>' +
         '</tr></thead><tbody id="rtbody"></tbody><tfoot id="rtfoot"></tfoot></table></div>';
 
     Db.listAllProducts().then(function (ps) {
@@ -56,7 +56,7 @@ window.Admin = (function () {
       product_id: document.getElementById('rp').value || null,
       worker_id: document.getElementById('rw').value || null
     };
-    document.getElementById('rtbody').innerHTML = '<tr><td colspan="7" class="center-note">查询中…</td></tr>';
+    document.getElementById('rtbody').innerHTML = '<tr><td colspan="8" class="center-note">查询中…</td></tr>';
     // 先建名称映射表，再拉服务端聚合结果（仅汇总行，体积极小）
     Promise.all([Db.listAllProducts(), Db.listAllParts(), Db.listWorkers()]).then(function (res) {
       (res[0] || []).forEach(function (p) { prodMap[p.id] = { code: p.code, name: p.name }; });
@@ -68,23 +68,23 @@ window.Admin = (function () {
       renderTable(lastRows);
       renderBoard(lastRows, f);
     }).catch(function (e) {
-      document.getElementById('rtbody').innerHTML = '<tr><td colspan="7" class="ocr-error">查询失败：' + esc(e.message || e) + '</td></tr>';
+      document.getElementById('rtbody').innerHTML = '<tr><td colspan="8" class="ocr-error">查询失败：' + esc(e.message || e) + '</td></tr>';
     });
   }
 
   function renderTable(rows) {
     var tbody = document.getElementById('rtbody');
     var tfoot = document.getElementById('rtfoot');
-    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" class="center-note">该条件无数据</td></tr>'; tfoot.innerHTML = ''; return; }
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="8" class="center-note">该条件无数据</td></tr>'; tfoot.innerHTML = ''; return; }
     var total = 0;
     tbody.innerHTML = rows.map(function (r) {
       total += (r.total_qty || 0);
       var p = prodMap[r.product_id] || {};
       var pt = partMap[r.part_id] || {};
       var wname = workerMap[r.worker_id] || '';
-      return '<tr><td>' + r.record_date + '</td><td>' + esc(p.code) + '</td><td>' + esc(p.name) + '</td><td>' + esc(pt.no) + '</td><td>' + esc(pt.name) + '</td><td>' + esc(wname) + '</td><td>' + r.total_qty + '</td></tr>';
+      return '<tr><td>' + r.record_date + '</td><td>' + esc(p.code) + '</td><td>' + esc(p.name) + '</td><td>' + esc(pt.no) + '</td><td>' + esc(pt.name) + '</td><td>' + esc(wname) + '</td><td>' + esc(r.shift || '') + '</td><td>' + r.total_qty + '</td></tr>';
     }).join('');
-    tfoot.innerHTML = '<tr><td colspan="6" style="text-align:right">合计</td><td>' + total + ' 件</td></tr>';
+    tfoot.innerHTML = '<tr><td colspan="7" style="text-align:right">合计</td><td>' + total + ' 件</td></tr>';
   }
 
   function renderBoard(rows, f) {
@@ -119,13 +119,13 @@ window.Admin = (function () {
 
   function exportCsv() {
     if (!lastRows || !lastRows.length) { UI.toast('请先查询再导出', true); return; }
-    var header = ['日期', '产品编号', '产品名', '工序号', '工序名', '员工', '数量'];
+    var header = ['日期', '产品编号', '产品名', '工序号', '工序名', '员工', '班次', '数量'];
     var lines = [header.join(',')];
     lastRows.forEach(function (r) {
       var p = prodMap[r.product_id] || {};
       var pt = partMap[r.part_id] || {};
       var wname = workerMap[r.worker_id] || '';
-      var row = [r.record_date, p.code, p.name, pt.no, pt.name, wname, r.total_qty];
+      var row = [r.record_date, p.code, p.name, pt.no, pt.name, wname, r.shift || '', r.total_qty];
       lines.push(row.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','));
     });
     var total = lastRows.reduce(function (a, r) { return a + (r.total_qty || 0); }, 0);

@@ -295,3 +295,23 @@ body.app-emp .search-box input:focus { border-color: var(--primary); box-shadow:
   font-weight: 700; padding: 8px 16px; border-radius: 8px; cursor: pointer;
 }
 
+/* ============================================================
+   班次选择（员工端录入 / 编辑；白班 / 中班 / 夜班 三选一）
+   ============================================================ */
+.shift-pick { display: flex; gap: 10px; }
+.shift-chip {
+  flex: 1; text-align: center; padding: 14px 8px; border-radius: 12px;
+  border: 1.5px solid var(--line); background: #fff; font-size: 15px; font-weight: 700;
+  color: var(--text); cursor: pointer; user-select: none; transition: all .12s ease;
+}
+.shift-chip:active { transform: scale(.98); }
+.shift-chip.on {
+  background: var(--primary); border-color: var(--primary); color: #fff;
+  box-shadow: 0 4px 12px rgba(29,111,184,.28);
+}
+/* 列表 / 表格里的小班次标签 */
+.shift-tag {
+  display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px;
+  border-radius: 10px; background: var(--primary-light); color: var(--primary-dark);
+}
+
