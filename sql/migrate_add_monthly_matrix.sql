@@ -1,5 +1,5 @@
 -- ============================================================
--- 迁移：新增月度矩阵报表函数 report_monthly_matrix
+-- 迁移：新增/修复月度矩阵报表函数 report_monthly_matrix
 -- 场景：线上库已运行，不能重跑 00_schema.sql。
 -- 用法：Supabase 控制台 → SQL Editor → 粘贴全量 → Run
 -- 幂等：可重复执行（drop function + create or replace + grant）
@@ -28,50 +28,53 @@ declare
 begin
   if not public.is_admin() then raise exception 'forbidden'; end if;
 
-  -- RETURN QUERY 的 SELECT 列必须按位置匹配 RETURNS TABLE，
-  -- 避免列别名与返回列同名导致 PL/pgSQL 解析歧义。
+  -- 所有中间列都加前缀，避免与 RETURNS TABLE 输出列同名产生歧义。
+  -- cells 通过 cross join generate_series + left join agg + array_agg 生成，保证长度固定 93。
   return query
   with agg as (
     select
-      r.product_id,
-      r.part_id,
-      r.worker_id,
+      r.product_id as a_pid,
+      r.part_id    as a_ptid,
+      r.worker_id  as a_wid,
       ((extract(day from r.record_date)::int) - 1) * 3
-        + case r.shift when '白班' then 0 when '中班' then 1 when '夜班' then 2 end as slot,
-      sum(r.qty) as qty
+        + case r.shift when '白班' then 0 when '中班' then 1 when '夜班' then 2 end as a_slot,
+      sum(r.qty) as a_qty
     from public.production_records r
     where r.record_date >= v_first
       and r.record_date < v_next
       and (f_product is null or r.product_id = f_product)
       and (f_worker is null or r.worker_id = f_worker)
       and r.shift in ('白班', '中班', '夜班')
-    group by r.product_id, r.part_id, r.worker_id, slot
+    group by r.product_id, r.part_id, r.worker_id, a_slot
   ),
-  lines as (
-    select product_id, part_id, worker_id, sum(qty) as line_total
-    from agg
-    group by product_id, part_id, worker_id
+  line_keys as (
+    select distinct a_pid, a_ptid, a_wid from agg
+  ),
+  full_cells as (
+    select
+      k.a_pid, k.a_ptid, k.a_wid,
+      sum(coalesce(a.a_qty, 0))::bigint as fc_total,
+      array_agg(coalesce(a.a_qty, 0) order by s.slot)::bigint[] as fc_cells
+    from line_keys k
+    cross join generate_series(0, 92) as s(slot)
+    left join agg a on a.a_pid  = k.a_pid
+                   and a.a_ptid = k.a_ptid
+                   and a.a_wid  = k.a_wid
+                   and a.a_slot = s.slot
+    group by k.a_pid, k.a_ptid, k.a_wid
   )
   select
-    p.code,
-    p.name,
-    pr.part_no,
-    pr.part_name,
-    split_part(pro.email, '@', 1),
-    (
-      select array_agg(coalesce(a.qty, 0) order by g.slot)
-      from generate_series(0, 92) as g(slot)
-      left join agg a
-        on a.product_id = l.product_id
-       and a.part_id   = l.part_id
-       and a.worker_id = l.worker_id
-       and a.slot      = g.slot
-    ),
-    l.line_total
-  from lines l
-  join public.products p  on p.id  = l.product_id
-  join public.parts   pr on pr.id = l.part_id
-  join public.profiles pro on pro.id = l.worker_id
+    p.code::text,
+    p.name::text,
+    pr.part_no::text,
+    pr.part_name::text,
+    split_part(pro.email, '@', 1)::text,
+    fc.fc_cells,
+    fc.fc_total
+  from full_cells fc
+  join public.products p   on p.id  = fc.a_pid
+  join public.parts   pr   on pr.id = fc.a_ptid
+  join public.profiles pro on pro.id = fc.a_wid
   order by p.code, pr.part_no, pro.email;
 end; $$;
 
