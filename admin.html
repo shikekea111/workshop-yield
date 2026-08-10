@@ -7,7 +7,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.png" />
   <title>车间产量 · 管理后台</title>
-  <link rel="stylesheet" href="css/styles.css?v=7" />
+  <link rel="stylesheet" href="css/styles.css?v=9" />
 </head>
 <body class="admin-body">
   <header class="app-header">
@@ -21,6 +21,7 @@
 
   <nav class="tabbar admin-tabbar" id="tabbar">
     <button class="tab" data-tab="report"><span class="tab-ico">📊</span><span class="tab-tx">汇总</span></button>
+    <button class="tab" data-tab="monthly"><span class="tab-ico">🗓️</span><span class="tab-tx">月报</span></button>
     <button class="tab" data-tab="products"><span class="tab-ico">📦</span><span class="tab-tx">产品/工序</span></button>
     <button class="tab" data-tab="workers"><span class="tab-ico">🧑‍🔧</span><span class="tab-tx">员工</span></button>
     <button class="tab" data-tab="me"><span class="tab-ico">⚙️</span><span class="tab-tx">设置</span></button>
@@ -28,6 +29,7 @@
 
   <div id="modalRoot"></div>
 
+  <script src="js/vendor/xlsx.full.min.js"></script>
   <script src="js/vendor/supabase.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/db.js"></script>

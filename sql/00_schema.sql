@@ -160,6 +160,76 @@ begin
 end; $$;
 
 -- ============================================================
+-- 服务端月度矩阵报表：行=产品×工序×员工，列=1日~31日×白/中/夜+合计
+-- 返回 cells 为长度 93 的 bigint[]，index=(日-1)*3+班次(0白班/1中班/2夜班)
+-- ============================================================
+drop function if exists public.report_monthly_matrix(int, int, uuid, uuid);
+create or replace function public.report_monthly_matrix(
+  f_year int,
+  f_month int,
+  f_product uuid default null,
+  f_worker uuid default null
+) returns table (
+  product_code   text,
+  product_name   text,
+  part_no        text,
+  part_name      text,
+  worker_account text,
+  cells          bigint[],
+  total_qty      bigint
+) language plpgsql security definer set search_path = public as $$
+declare
+  v_first date := make_date(f_year, f_month, 1);
+  v_next  date := (v_first + interval '1 month')::date;
+begin
+  if not public.is_admin() then raise exception 'forbidden'; end if;
+
+  return query
+  with agg as (
+    select
+      r.product_id,
+      r.part_id,
+      r.worker_id,
+      ((extract(day from r.record_date)::int) - 1) * 3
+        + case r.shift when '白班' then 0 when '中班' then 1 when '夜班' then 2 end as slot,
+      sum(r.qty) as qty
+    from public.production_records r
+    where r.record_date >= v_first
+      and r.record_date < v_next
+      and (f_product is null or r.product_id = f_product)
+      and (f_worker is null or r.worker_id = f_worker)
+      and r.shift in ('白班', '中班', '夜班')
+    group by r.product_id, r.part_id, r.worker_id, slot
+  ),
+  lines as (
+    select product_id, part_id, worker_id, sum(qty) as total_qty
+    from agg
+    group by product_id, part_id, worker_id
+  )
+  select
+    p.code,
+    p.name,
+    pr.part_no,
+    pr.part_name,
+    split_part(pro.email, '@', 1) as worker_account,
+    (
+      select array_agg(coalesce(a.qty, 0) order by g.slot)
+      from generate_series(0, 92) as g(slot)
+      left join agg a
+        on a.product_id = l.product_id
+       and a.part_id   = l.part_id
+       and a.worker_id = l.worker_id
+       and a.slot      = g.slot
+    ) as cells,
+    l.total_qty
+  from lines l
+  join public.products p  on p.id  = l.product_id
+  join public.parts   pr on pr.id = l.part_id
+  join public.profiles pro on pro.id = l.worker_id
+  order by p.code, pr.part_no, pro.email;
+end; $$;
+
+-- ============================================================
 -- 管理员在应用内创建员工账号（SECURITY DEFINER，由 is_admin 守门）
 -- 前端调用： Db.createWorker(email, password, name)
 -- 说明：直接写 auth.users + auth.identities。直接 INSERT 会遗漏：
@@ -327,5 +397,6 @@ grant insert, update, delete on public.daily_plans        to authenticated;
 grant update                   on public.profiles          to authenticated;
 grant usage on all sequences in schema public to authenticated;
 grant execute on function public.report_summary(date,date,uuid,uuid) to authenticated;
+grant execute on function public.report_monthly_matrix(int,int,uuid) to authenticated;
 grant execute on function public.admin_create_user(text,text,text,text) to authenticated;
 grant execute on function public.is_admin() to authenticated;

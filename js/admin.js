@@ -10,6 +10,7 @@ window.Admin = (function () {
 
   function render(tab) {
     if (tab === 'report') return renderReport();
+    if (tab === 'monthly') return renderMonthly();
     if (tab === 'products') return renderProducts();
     if (tab === 'workers') return renderWorkers();
     if (tab === 'me') return renderMe();
@@ -49,6 +50,8 @@ window.Admin = (function () {
 
   var lastRows = null;
   var prodMap = {}, partMap = {}, workerMap = {};   // id -> 名称，避免每行回查
+  var lastMatrix = null;
+  var SHIFTS = ['白班', '中班', '夜班'];
   function runReport() {
     var f = {
       from: document.getElementById('rf').value || '2000-01-01',
@@ -115,6 +118,119 @@ window.Admin = (function () {
       });
       box.innerHTML = html;
     }).catch(function () { box.innerHTML = ''; });
+  }
+
+  // ---------------- 月度矩阵报表 ----------------
+  function renderMonthly() {
+    var view = document.getElementById('view');
+    var today = new Date();
+    var defaultMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+    view.innerHTML =
+      '<div class="card"><h2>🗓️ 月度矩阵报表</h2>' +
+        '<div class="filters">' +
+          '<div class="field"><label>月份</label><input id="mm" type="month" value="' + defaultMonth + '"></div>' +
+          '<div class="field"><label>产品</label><select id="mp"><option value="">全部</option></select></div>' +
+          '<div class="field"><label>员工</label><select id="mw"><option value="">全部</option></select></div>' +
+        '</div>' +
+        '<button class="btn" id="mq">查询</button>' +
+        '<button class="btn secondary sm" id="mex" style="margin-top:8px">导出 Excel</button>' +
+      '</div>' +
+      '<div class="matrix-wrap"><table class="matrix" id="mtbl"></table></div>';
+
+    Db.listAllProducts().then(function (ps) {
+      var sel = document.getElementById('mp');
+      (ps || []).forEach(function (p) { sel.insertAdjacentHTML('beforeend', '<option value="' + p.id + '">' + esc(p.code) + ' ' + esc(p.name) + '</option>'); });
+    });
+    Db.listWorkers().then(function (ws) {
+      var sel = document.getElementById('mw');
+      (ws || []).forEach(function (w) { sel.insertAdjacentHTML('beforeend', '<option value="' + w.id + '">' + esc(String(w.email).split('@')[0]) + '</option>'); });
+    });
+
+    document.getElementById('mq').addEventListener('click', runMonthly);
+    document.getElementById('mex').addEventListener('click', exportMatrixXlsx);
+  }
+
+  function runMonthly() {
+    var m = document.getElementById('mm').value || '';
+    if (!/^\d{4}-\d{2}$/.test(m)) { UI.toast('请选择月份', true); return; }
+    var year = +m.slice(0, 4), month = +m.slice(5, 7);
+    var pid = document.getElementById('mp').value || null;
+    var wid = document.getElementById('mw').value || null;
+    var tbl = document.getElementById('mtbl');
+    tbl.innerHTML = '<tbody><tr><td class="center-note" style="padding:20px">查询中…</td></tr></tbody>';
+    Db.monthlyMatrix({ year: year, month: month, product_id: pid, worker_id: wid })
+      .then(function (rows) {
+        lastMatrix = { rows: rows || [], year: year, month: month };
+        renderMatrix(rows || []);
+      })
+      .catch(function (e) {
+        tbl.innerHTML = '<tbody><tr><td class="ocr-error" style="padding:20px">查询失败：' + esc(e.message || e) + '</td></tr></tbody>';
+      });
+  }
+
+  function renderMatrix(rows) {
+    var tbl = document.getElementById('mtbl');
+    var head1 = '<tr>' +
+      '<th rowspan="2" class="rh c-month">月份</th>' +
+      '<th rowspan="2" class="rh c-pcode">产品编号</th>' +
+      '<th rowspan="2" class="rh c-pname">产品名称</th>' +
+      '<th rowspan="2" class="rh c-partno">工序号</th>' +
+      '<th rowspan="2" class="rh c-partname">工序名称</th>' +
+      '<th rowspan="2" class="rh c-worker">工号</th>';
+    var head2 = '<tr>';
+    for (var d = 1; d <= 31; d++) {
+      head1 += '<th colspan="3">' + d + '日</th>';
+      head2 += '<th>白班</th><th>中班</th><th>夜班</th>';
+    }
+    head1 += '<th rowspan="2">合计</th></tr>';
+    head2 += '</tr>';
+
+    var tbody = '';
+    if (!rows.length) {
+      tbody = '<tr><td colspan="100" class="center-note">该条件无数据</td></tr>';
+    } else {
+      rows.forEach(function (r) {
+        var monthStr = lastMatrix.year + '-' + String(lastMatrix.month).padStart(2, '0');
+        tbody += '<tr>' +
+          '<td class="rh c-month">' + esc(monthStr) + '</td>' +
+          '<td class="rh c-pcode">' + esc(r.product_code) + '</td>' +
+          '<td class="rh c-pname">' + esc(r.product_name) + '</td>' +
+          '<td class="rh c-partno">' + esc(r.part_no) + '</td>' +
+          '<td class="rh c-partname">' + esc(r.part_name) + '</td>' +
+          '<td class="rh c-worker">' + esc(r.worker_account) + '</td>';
+        for (var k = 0; k < 93; k++) {
+          var c = r.cells ? r.cells[k] : null;
+          tbody += '<td>' + (c == null ? '0' : String(c)) + '</td>';
+        }
+        tbody += '<td>' + (r.total_qty == null ? '0' : String(r.total_qty)) + '</td></tr>';
+      });
+    }
+
+    tbl.innerHTML = '<thead>' + head1 + head2 + '</thead><tbody>' + tbody + '</tbody>';
+  }
+
+  function exportMatrixXlsx() {
+    if (!lastMatrix || !lastMatrix.rows.length) { UI.toast('请先查询再导出', true); return; }
+    if (typeof XLSX === 'undefined') { UI.toast('Excel 组件未加载，请刷新后重试', true); return; }
+    var monthStr = lastMatrix.year + '-' + String(lastMatrix.month).padStart(2, '0');
+    var head = ['月份', '产品编号', '产品名称', '工序号', '工序名称', '工号'];
+    for (var d = 1; d <= 31; d++) { SHIFTS.forEach(function (s) { head.push(d + '日' + s); }); }
+    head.push('合计');
+    var data = [head];
+    lastMatrix.rows.forEach(function (r) {
+      var row = [monthStr, r.product_code, r.product_name, r.part_no, r.part_name, r.worker_account];
+      for (var k = 0; k < 93; k++) {
+        var c = r.cells ? r.cells[k] : null;
+        row.push(c == null ? 0 : Number(c));
+      }
+      row.push(r.total_qty == null ? 0 : Number(r.total_qty));
+      data.push(row);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(data);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '月报');
+    XLSX.writeFile(wb, '月报_' + monthStr + '.xlsx');
+    UI.toast('已导出 Excel');
   }
 
   function exportCsv() {

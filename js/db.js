@@ -124,6 +124,16 @@
           f_worker: f.worker_id || null
         }).then(function (r) { if (r.error) throw r.error; return r.data; });
       },
+      // 月度矩阵报表：一行 = 产品×工序×员工；cells 为长度 93 的数组（31日×3班次）
+      monthlyMatrix: function (o) {
+        o = o || {};
+        return client.rpc('report_monthly_matrix', {
+          f_year: o.year,
+          f_month: o.month,
+          f_product: o.product_id || null,
+          f_worker: o.worker_id || null
+        }).then(function (r) { if (r.error) throw r.error; return r.data; });
+      },
       // 明细查询（保留：如需按记录级导出/审计时使用；报表主链路已改用 reportSummary）
       listAllRecords: function (f) {
         f = f || {};
