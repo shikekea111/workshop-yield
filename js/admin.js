@@ -175,8 +175,7 @@ window.Admin = (function () {
       '<th rowspan="2" class="rh c-pcode">产品编号</th>' +
       '<th rowspan="2" class="rh c-pname">产品名称</th>' +
       '<th rowspan="2" class="rh c-partno">工序号</th>' +
-      '<th rowspan="2" class="rh c-partname">工序名称</th>' +
-      '<th rowspan="2" class="rh c-worker">工号</th>';
+      '<th rowspan="2" class="rh c-partname">工序名称</th>';
     var head2 = '<tr>';
     for (var d = 1; d <= 31; d++) {
       head1 += '<th colspan="3">' + d + '日</th>';
@@ -196,8 +195,7 @@ window.Admin = (function () {
           '<td class="rh c-pcode">' + esc(r.product_code) + '</td>' +
           '<td class="rh c-pname">' + esc(r.product_name) + '</td>' +
           '<td class="rh c-partno">' + esc(r.part_no) + '</td>' +
-          '<td class="rh c-partname">' + esc(r.part_name) + '</td>' +
-          '<td class="rh c-worker">' + esc(r.worker_account) + '</td>';
+          '<td class="rh c-partname">' + esc(r.part_name) + '</td>';
         for (var k = 0; k < 93; k++) {
           var c = r.cells ? r.cells[k] : null;
           tbody += '<td>' + (c == null ? '0' : String(c)) + '</td>';
@@ -213,12 +211,12 @@ window.Admin = (function () {
     if (!lastMatrix || !lastMatrix.rows.length) { UI.toast('请先查询再导出', true); return; }
     if (typeof XLSX === 'undefined') { UI.toast('Excel 组件未加载，请刷新后重试', true); return; }
     var monthStr = lastMatrix.year + '-' + String(lastMatrix.month).padStart(2, '0');
-    var head = ['月份', '产品编号', '产品名称', '工序号', '工序名称', '工号'];
+    var head = ['月份', '产品编号', '产品名称', '工序号', '工序名称'];
     for (var d = 1; d <= 31; d++) { SHIFTS.forEach(function (s) { head.push(d + '日' + s); }); }
     head.push('合计');
     var data = [head];
     lastMatrix.rows.forEach(function (r) {
-      var row = [monthStr, r.product_code, r.product_name, r.part_no, r.part_name, r.worker_account];
+      var row = [monthStr, r.product_code, r.product_name, r.part_no, r.part_name];
       for (var k = 0; k < 93; k++) {
         var c = r.cells ? r.cells[k] : null;
         row.push(c == null ? 0 : Number(c));
