@@ -5,6 +5,7 @@
 -- 幂等：可重复执行（drop function + create or replace + grant）
 -- ============================================================
 
+drop function if exists public.report_monthly_matrix(int, int, uuid);
 drop function if exists public.report_monthly_matrix(int, int, uuid, uuid);
 
 create or replace function public.report_monthly_matrix(
@@ -27,6 +28,8 @@ declare
 begin
   if not public.is_admin() then raise exception 'forbidden'; end if;
 
+  -- RETURN QUERY 的 SELECT 列必须按位置匹配 RETURNS TABLE，
+  -- 避免列别名与返回列同名导致 PL/pgSQL 解析歧义。
   return query
   with agg as (
     select
@@ -45,7 +48,7 @@ begin
     group by r.product_id, r.part_id, r.worker_id, slot
   ),
   lines as (
-    select product_id, part_id, worker_id, sum(qty) as total_qty
+    select product_id, part_id, worker_id, sum(qty) as line_total
     from agg
     group by product_id, part_id, worker_id
   )
@@ -54,7 +57,7 @@ begin
     p.name,
     pr.part_no,
     pr.part_name,
-    split_part(pro.email, '@', 1) as worker_account,
+    split_part(pro.email, '@', 1),
     (
       select array_agg(coalesce(a.qty, 0) order by g.slot)
       from generate_series(0, 92) as g(slot)
@@ -63,8 +66,8 @@ begin
        and a.part_id   = l.part_id
        and a.worker_id = l.worker_id
        and a.slot      = g.slot
-    ) as cells,
-    l.total_qty
+    ),
+    l.line_total
   from lines l
   join public.products p  on p.id  = l.product_id
   join public.parts   pr on pr.id = l.part_id
@@ -73,5 +76,8 @@ begin
 end; $$;
 
 grant execute on function public.report_monthly_matrix(int, int, uuid, uuid) to authenticated;
+
+-- 刷新 PostgREST schema 缓存，避免函数签名变更后 App 仍拿到旧缓存
+notify pgrst, 'reload schema';
 
 select 'migration ok: report_monthly_matrix added' as result;

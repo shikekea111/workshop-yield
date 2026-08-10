@@ -163,6 +163,7 @@ end; $$;
 -- 服务端月度矩阵报表：行=产品×工序×员工，列=1日~31日×白/中/夜+合计
 -- 返回 cells 为长度 93 的 bigint[]，index=(日-1)*3+班次(0白班/1中班/2夜班)
 -- ============================================================
+drop function if exists public.report_monthly_matrix(int, int, uuid);
 drop function if exists public.report_monthly_matrix(int, int, uuid, uuid);
 create or replace function public.report_monthly_matrix(
   f_year int,
@@ -184,6 +185,8 @@ declare
 begin
   if not public.is_admin() then raise exception 'forbidden'; end if;
 
+  -- 注意：RETURN QUERY 的 SELECT 列必须按位置匹配 RETURNS TABLE，
+  -- 所以不要给列起与返回列同名的别名，避免 PL/pgSQL 解析歧义。
   return query
   with agg as (
     select
@@ -202,7 +205,7 @@ begin
     group by r.product_id, r.part_id, r.worker_id, slot
   ),
   lines as (
-    select product_id, part_id, worker_id, sum(qty) as total_qty
+    select product_id, part_id, worker_id, sum(qty) as line_total
     from agg
     group by product_id, part_id, worker_id
   )
@@ -211,7 +214,7 @@ begin
     p.name,
     pr.part_no,
     pr.part_name,
-    split_part(pro.email, '@', 1) as worker_account,
+    split_part(pro.email, '@', 1),
     (
       select array_agg(coalesce(a.qty, 0) order by g.slot)
       from generate_series(0, 92) as g(slot)
@@ -220,8 +223,8 @@ begin
        and a.part_id   = l.part_id
        and a.worker_id = l.worker_id
        and a.slot      = g.slot
-    ) as cells,
-    l.total_qty
+    ),
+    l.line_total
   from lines l
   join public.products p  on p.id  = l.product_id
   join public.parts   pr on pr.id = l.part_id
@@ -397,6 +400,6 @@ grant insert, update, delete on public.daily_plans        to authenticated;
 grant update                   on public.profiles          to authenticated;
 grant usage on all sequences in schema public to authenticated;
 grant execute on function public.report_summary(date,date,uuid,uuid) to authenticated;
-grant execute on function public.report_monthly_matrix(int,int,uuid) to authenticated;
+grant execute on function public.report_monthly_matrix(int,int,uuid,uuid) to authenticated;
 grant execute on function public.admin_create_user(text,text,text,text) to authenticated;
 grant execute on function public.is_admin() to authenticated;
