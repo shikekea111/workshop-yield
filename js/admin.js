@@ -9,6 +9,10 @@ window.Admin = (function () {
   }
 
   function render(tab) {
+    // 班组长(leader)仅可访问 汇总/月报/设置，禁止进入产品与员工管理
+    if (App.profile && App.profile.role === 'leader' && (tab === 'products' || tab === 'workers')) {
+      return renderReport();
+    }
     if (tab === 'report') return renderReport();
     if (tab === 'monthly') return renderMonthly();
     if (tab === 'products') return renderProducts();
@@ -558,7 +562,7 @@ window.Admin = (function () {
       '</div>';
     Db.listWorkers().then(function (ws) {
       document.getElementById('wbody').innerHTML = (ws || []).map(function (w) {
-        return '<tr><td>' + esc(String(w.email).split('@')[0]) + (w.role === 'admin' ? '（管理员）' : '') + '</td><td>' + esc(w.email) + '</td><td>' + (w.disabled ? '<span class="badge off">已禁用</span>' : '<span class="badge ok">正常</span>') + '</td>' +
+        return '<tr><td>' + esc(String(w.email).split('@')[0]) + (w.role === 'admin' ? '（管理员）' : w.role === 'leader' ? '（班组长）' : '') + '</td><td>' + esc(w.email) + '</td><td>' + (w.disabled ? '<span class="badge off">已禁用</span>' : '<span class="badge ok">正常</span>') + '</td>' +
           '<td><button class="btn sm ' + (w.disabled ? '' : 'danger') + '" data-toggle="' + w.id + '">' + (w.disabled ? '启用' : '禁用') + '</button></td></tr>';
       }).join('') || '<tr><td colspan="4" class="center-note">暂无员工</td></tr>';
       document.getElementById('wbody').querySelectorAll('[data-toggle]').forEach(function (b) {
@@ -573,15 +577,16 @@ window.Admin = (function () {
     document.getElementById('batchW').onclick = openBatchImport;
 
     document.getElementById('addW').onclick = function () {
-      UI.modal('创建员工', '<div class="field"><label>工号/账号前缀（可不填姓名）</label><input id="wn" placeholder="如 1001"></div><div class="field"><label>邮箱（作为账号）</label><input id="we" type="email" placeholder="1001@factory.local"></div><div class="field"><label>初始密码</label><input id="wp" type="password" placeholder="至少6位"></div>', {
+      UI.modal('创建员工', '<div class="field"><label>工号/账号前缀（可不填姓名）</label><input id="wn" placeholder="如 1001"></div><div class="field"><label>邮箱（作为账号）</label><input id="we" type="email" placeholder="1001@factory.local"></div><div class="field"><label>初始密码</label><input id="wp" type="password" placeholder="至少6位"></div><div class="field"><label>角色</label><select id="wr"><option value="worker">员工（仅上报产量）</option><option value="leader">班组长（查看+导出汇总/月报）</option></select></div>', {
         center: true, okText: '创建',
         onOk: function () {
           var name = document.getElementById('wn').value.trim();
           var email = document.getElementById('we').value.trim();
           var pw = document.getElementById('wp').value;
+          var role = document.getElementById('wr').value;
           if (!email || pw.length < 6) { UI.toast('请填邮箱和初始密码（≥6位）', true); return; }
           if (!name) name = String(email).split('@')[0];   // 不绑定姓名时，display_name 默认用账号前缀
-          Db.createWorker(email, pw, name).then(function () { UI.close(); UI.toast('员工已创建'); renderWorkers(); })
+          Db.createWorker(email, pw, name, role).then(function () { UI.close(); UI.toast(role === 'leader' ? '班组长已创建' : '员工已创建'); renderWorkers(); })
             .catch(function (e) { UI.toast('创建失败：' + (e.message || e) + '（若提示 forbidden，请确认当前账号为管理员；部分 Supabase 版本需用后台手动建号）', true); });
         }
       });

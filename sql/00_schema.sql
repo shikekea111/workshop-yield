@@ -11,7 +11,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   display_name text,
-  role text not null default 'worker' check (role in ('admin','worker')),
+  role text not null default 'worker' check (role in ('admin','leader','worker')),
   disabled boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -84,6 +84,12 @@ language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.profiles where id = auth.uid() and role='admin' and not disabled);
 $$;
 
+-- 管理/班组长判定：admin 或 leader（班组长可查看+导出报表，但不能管理主数据/账号）
+create or replace function public.is_staff() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and role in ('admin','leader') and not disabled);
+$$;
+
 -- 新用户注册时自动建 profile（Dashboard 建号 / 任何 signUp 都走这里）
 create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -99,7 +105,7 @@ create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
 
 -- profiles：本人可读自己；admin 读全部、可改
-create policy p_profiles_self on public.profiles for select using (id = auth.uid() or public.is_admin());
+create policy p_profiles_self on public.profiles for select using (id = auth.uid() or public.is_staff());
 create policy p_profiles_admin_w on public.profiles for update using (public.is_admin());
 
 -- products / parts：登录用户可读；仅 admin 可写
@@ -147,7 +153,7 @@ create or replace function public.report_summary(
   total_qty bigint
 ) language plpgsql security definer set search_path = public as $$
 begin
-  if not public.is_admin() then raise exception 'forbidden'; end if;
+  if not public.is_staff() then raise exception 'forbidden'; end if;
   return query
   select r.record_date, r.product_id, r.part_id, r.worker_id, r.shift, sum(r.qty) as total_qty
   from public.production_records r
@@ -183,7 +189,7 @@ declare
   v_first date := make_date(f_year, f_month, 1);
   v_next  date := (v_first + interval '1 month')::date;
 begin
-  if not public.is_admin() then raise exception 'forbidden'; end if;
+  if not public.is_staff() then raise exception 'forbidden'; end if;
 
   -- 所有中间列都加前缀，避免与 RETURNS TABLE 输出列同名产生歧义。
   -- cells 通过 cross join generate_series + left join agg + array_agg 生成，保证长度固定 93。
@@ -406,3 +412,4 @@ grant execute on function public.report_summary(date,date,uuid,uuid) to authenti
 grant execute on function public.report_monthly_matrix(int,int,uuid,uuid) to authenticated;
 grant execute on function public.admin_create_user(text,text,text,text) to authenticated;
 grant execute on function public.is_admin() to authenticated;
+grant execute on function public.is_staff() to authenticated;

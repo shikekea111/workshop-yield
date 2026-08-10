@@ -148,8 +148,8 @@
       listWorkers: function () {
         return client.from('profiles').select('*').order('display_name').then(function (r) { if (r.error) throw r.error; return r.data; });
       },
-      createWorker: function (email, pw, name) {
-        return client.rpc('admin_create_user', { p_email: email, p_password: pw, p_name: name, p_role: 'worker' })
+      createWorker: function (email, pw, name, role) {
+        return client.rpc('admin_create_user', { p_email: email, p_password: pw, p_name: name, p_role: role || 'worker' })
           .then(function (r) { if (r.error) throw r.error; return r.data; });
       },
       setWorkerDisabled: function (id, dis) {

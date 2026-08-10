@@ -72,10 +72,19 @@ window.App = { mode: 'emp', session: null, profile: null, currentTab: null };
   }
 
   function boot() {
-    if (App.mode === 'admin' && App.profile.role !== 'admin') { location.href = 'index.html'; return; }
-    if (App.mode === 'emp' && App.profile.role === 'admin') { location.href = 'admin.html'; return; }
+    var role = (App.profile && App.profile.role) || 'worker';
+    var isStaff = (role === 'admin' || role === 'leader');
+    if (App.mode === 'admin' && !isStaff) { location.href = 'index.html'; return; }
+    if (App.mode === 'emp' && isStaff) { location.href = 'admin.html'; return; }
     var tabbar = document.getElementById('tabbar');
-    if (tabbar) tabbar.style.display = 'flex';
+    if (tabbar) {
+      tabbar.style.display = 'flex';
+      // 班组长(leader)只看汇总/月报/设置，隐藏产品与员工管理入口
+      if (role === 'leader') {
+        var hideTabs = tabbar.querySelectorAll('[data-tab="products"], [data-tab="workers"]');
+        hideTabs.forEach(function (t) { t.style.display = 'none'; });
+      }
+    }
     var def = (App.mode === 'admin') ? 'report' : 'record';
     go(def);
   }
