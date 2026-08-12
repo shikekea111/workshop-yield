@@ -341,7 +341,7 @@ window.Employee = (function () {
           '</div>' +
         '</div>' +
         '<button class="btn" id="goAdd">＋ 新增上报</button>' +
-        '<button class="btn ghost" id="goBatch">📋 批量填报</button>' +
+        '<button class="btn secondary" id="goBatch">📋 批量填报</button>' +
         '<div class="card emp-tips">' +
           '<div class="et-ico">💡</div>' +
           '<div class="et-body"><b>怎么用</b><p class="muted">选产品 → 选工序 → 填数量 → 提交。工序由管理员预置，无需手输，避免写错。</p></div>' +
