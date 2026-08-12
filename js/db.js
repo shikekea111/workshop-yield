@@ -151,9 +151,23 @@
       listWorkers: function () {
         return client.from('profiles').select('*').order('display_name').then(function (r) { if (r.error) throw r.error; return r.data; });
       },
+      // 通过 Supabase Edge Function（create-user）创建账号，走官方 Auth Admin API。
+      // 根治旧 admin_create_user 直插 auth 表导致登录报「Database error querying schema」的问题。
+      // 调用者必须是 admin（Edge Function 内部校验），前端只传自己的登录 JWT。
       createWorker: function (email, pw, name, role) {
-        return client.rpc('admin_create_user', { p_email: email, p_password: pw, p_name: name, p_role: role || 'worker' })
-          .then(function (r) { if (r.error) throw r.error; return r.data; });
+        return sess().then(function (s) {
+          if (!s) throw new Error('未登录，请重新登录');
+          var base = (cfg.SUPABASE_URL || '').replace(/\/$/, '');
+          var url = base + '/functions/v1/create-user';
+          return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.access_token },
+            body: JSON.stringify({ email: email, password: pw, display_name: name || null, role: role || 'worker' })
+          });
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          if (j && j.error) throw new Error(j.error);
+          return j && j.data;
+        });
       },
       setWorkerDisabled: function (id, dis) {
         return client.from('profiles').update({ disabled: dis }).eq('id', id).then(function (r) { if (r.error) throw r.error; });
