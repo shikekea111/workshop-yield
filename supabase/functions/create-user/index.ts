@@ -1,7 +1,7 @@
 // 员工/班组长创建函数 —— 走官方 Auth Admin API（与 Dashboard「Add user」同一后端）
 // 根治「SQL 直插 auth.users 导致登录报 Database error querying schema」的问题。
 //
-// 部署后需在函数 Secrets 里设置 SUPABASE_SERVICE_ROLE_KEY（service_role 密钥，切勿泄露到前端）。
+// 部署后需在函数 Secrets 里设置 SERVICE_ROLE_KEY（service_role 密钥，切勿泄露到前端）。
 // SUPABASE_URL / SUPABASE_ANON_KEY 通常由 Supabase 自动注入，若没有请手动补为 secret。
 //
 // 安全模型：前端只传自己的登录 JWT；本函数校验调用者为 admin，再用 service_role 建号。
@@ -34,9 +34,9 @@ Deno.serve(async (req: Request) => {
   try {
     const SUPABASE_URL = (Deno.env.get('SUPABASE_URL') || '').replace(/\/$/, '');
     const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
-    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY') || '';
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-      return json({ error: '服务端未配置 SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY' }, 500);
+      return json({ error: '服务端未配置 SUPABASE_URL / SERVICE_ROLE_KEY' }, 500);
     }
 
     const authHeader = req.headers.get('Authorization') || '';

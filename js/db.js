@@ -97,8 +97,11 @@
         patch.updated_at = new Date().toISOString();
         return client.from('production_records').update(patch).eq('id', id).then(function (r) { if (r.error) throw r.error; });
       },
+      // 删除按主键 id；返回完整结果（含 count=实际影响行数），供前端判断删除是否真的生效，
+      // 避免 RLS 静默拦掉 0 行时还谎报"已删除"。
       deleteRecord: function (id) {
-        return client.from('production_records').delete().eq('id', id).then(function (r) { if (r.error) throw r.error; });
+        return client.from('production_records').delete({ count: 'exact' }).eq('id', id)
+          .then(function (r) { if (r.error) throw r.error; return r; });
       },
       listMyRecords: function (date) {
         return sess().then(function (s) {

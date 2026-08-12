@@ -386,7 +386,19 @@ window.Employee = (function () {
   function doDelete(id) {
     UI.confirm('确定删除这条上报记录吗？', '删除').then(function (ok) {
       if (!ok) return;
-      Db.deleteRecord(id).then(function () { UI.toast('已删除'); renderToday(); }).catch(function (e) { UI.toast('删除失败：' + (e.message || e), true); });
+      UI.toast('删除中…');
+      Db.deleteRecord(id).then(function (res) {
+        // count = 服务端实际删除的行数；RLS 拦截时可能为 0（如记录不是今天的）
+        var n = (res && res.count != null) ? res.count : 0;
+        if (n === 0) {
+          UI.toast('未删除：该记录可能不是今天的，或已被删除', true);
+        } else {
+          UI.toast('已删除 1 条');
+        }
+        // 以真库为准重刷：今日列表 + 首页（记录 tab）的"已报工序"计数，避免陈旧视图
+        renderToday();
+        render('record');
+      }).catch(function (e) { UI.toast('删除失败：' + (e.message || e), true); });
     });
   }
 
