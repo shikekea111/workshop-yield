@@ -3,6 +3,7 @@ window.Employee = (function () {
   'use strict';
 
   var curDraft = null;        // 当前上报草稿（同一时间只有一个）
+  var curBatch = null;        // 批量填报草稿（同一产品多工序）
   var allProducts = [];
   var allParts = [];
 
@@ -150,6 +151,170 @@ window.Employee = (function () {
     }).catch(function (e) { UI.toast('提交失败：' + (e.message || e), true); });
   }
 
+  // ---------- 批量填报（选同一产品 → 勾选多工序 → 各填数量 → 统一班次 → 一次提交） ----------
+  function openBatchAdd() {
+    curBatch = { product: null, parts: [], selected: {}, shift: guessShift(), _body: null, _close: null };
+    UI.sheet('批量填报', '', function (bodyEl, close) {
+      curBatch._body = bodyEl; curBatch._close = close;
+      stepBatch('product');
+    });
+  }
+
+  function stepBatch(st) {
+    var body = curBatch._body;
+    if (st === 'product') {
+      body.innerHTML = '<div class="search-box"><span class="si">🔍</span><input id="bsp" placeholder="搜索产品编号/名称"></div><div id="bplist"><div class="ocr-loading">加载中…</div></div>';
+      Db.listProducts().then(function (rows) {
+        var list = rows || [];
+        renderBatchProductList(list);
+        body.querySelector('#bsp').addEventListener('input', function (e) {
+          var kw = e.target.value.trim().toLowerCase();
+          var f = list.filter(function (p) { return !kw || (p.code + ' ' + p.name).toLowerCase().indexOf(kw) >= 0; });
+          renderBatchProductList(f);
+        });
+      }).catch(function (e) { body.querySelector('#bplist').innerHTML = '<p class="ocr-error">加载失败：' + esc(e.message || e) + '</p>'; });
+    } else if (st === 'parts') {
+      body.innerHTML =
+        '<p class="muted">' + esc(curBatch.product.code) + ' ' + esc(curBatch.product.name) +
+        '　<a data-act="back" style="color:var(--primary)">重选</a></p>' +
+        '<p class="muted" style="margin:-4px 0 8px">勾选工序并填写数量（可多选）</p>' +
+        '<div id="bptlist"><div class="ocr-loading">加载中…</div></div>' +
+        '<div class="field"><label>班次（整批统一）</label><div class="shift-pick" id="bshiftPick">' +
+          '<div class="shift-chip" data-shift="白班">☀️ 白班</div>' +
+          '<div class="shift-chip" data-shift="中班">🌙 中班</div>' +
+          '<div class="shift-chip" data-shift="夜班">🌃 夜班</div>' +
+        '</div></div>' +
+        '<button class="btn" id="toPreview">预览</button>';
+      body.querySelector('[data-act=back]').addEventListener('click', function () { stepBatch('product'); });
+      var sp = body.querySelector('#bshiftPick');
+      sp.querySelectorAll('.shift-chip').forEach(function (c) {
+        c.addEventListener('click', function () {
+          curBatch.shift = c.getAttribute('data-shift');
+          sp.querySelectorAll('.shift-chip').forEach(function (x) { x.classList.toggle('on', x === c); });
+        });
+      });
+      var pre = curBatch.shift;
+      sp.querySelectorAll('.shift-chip').forEach(function (c) { if (c.getAttribute('data-shift') === pre) c.classList.add('on'); });
+      Db.listPartsByProduct(curBatch.product.id).then(function (rows) {
+        curBatch.parts = rows || [];
+        renderBatchPartList();
+      }).catch(function (e) { body.querySelector('#bptlist').innerHTML = '<p class="ocr-error">加载失败：' + esc(e.message || e) + '</p>'; });
+      body.querySelector('#toPreview').addEventListener('click', function () { stepBatch('preview'); });
+    } else if (st === 'preview') {
+      var chosen = Object.keys(curBatch.selected).map(function (k) { return curBatch.selected[k]; }).filter(function (s) { return s.qty > 0; });
+      var total = chosen.reduce(function (a, s) { return a + s.qty; }, 0);
+      var html = '<p class="muted">产品：' + esc(curBatch.product.code) + ' ' + esc(curBatch.product.name) + '　班次：' + esc(curBatch.shift || '未选') + '</p>';
+      if (!chosen.length) {
+        html += '<div class="empty"><div class="em-ico">📋</div>还没有填写数量的工序</div>';
+      } else {
+        html += '<div class="batch-list" id="bPreview">';
+        chosen.forEach(function (s) {
+          html += '<div class="batch-row" data-pid="' + s.part.id + '">' +
+            '<div class="br-main">' + esc(s.part.part_no) + ' · ' + esc(s.part.part_name) + '</div>' +
+            '<input class="br-qty" type="number" min="1" inputmode="numeric" value="' + s.qty + '">' +
+            '<button class="br-del" data-act="del" aria-label="删除">✕</button>' +
+          '</div>';
+        });
+        html += '</div><div class="batch-sum">共 <b>' + chosen.length + '</b> 道工序 · 合计 <b>' + total + '</b> 件</div>';
+      }
+      html += '<div class="batch-actions">' +
+        '<button class="btn ghost" id="backEdit">返回修改</button>' +
+        '<button class="btn" id="doSubmit"' + (chosen.length ? '' : ' disabled') + '>提交（' + chosen.length + '条）</button>' +
+      '</div>';
+      body.innerHTML = html;
+      body.querySelector('#backEdit').addEventListener('click', function () { stepBatch('parts'); });
+      body.querySelectorAll('#bPreview .br-qty').forEach(function (inp) {
+        inp.addEventListener('input', function (e) {
+          var pid = e.target.closest('.batch-row').getAttribute('data-pid');
+          var v = parseInt(e.target.value, 10);
+          if (curBatch.selected[pid]) curBatch.selected[pid].qty = (isNaN(v) ? 0 : v);
+        });
+      });
+      body.querySelectorAll('#bPreview .br-del').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          delete curBatch.selected[e.target.closest('.batch-row').getAttribute('data-pid')];
+          stepBatch('preview');
+        });
+      });
+      var doSubmitBtn = body.querySelector('#doSubmit');
+      if (doSubmitBtn) doSubmitBtn.addEventListener('click', submitBatch);
+    }
+  }
+
+  function renderBatchProductList(list) {
+    var box = curBatch._body.querySelector('#bplist');
+    if (!list.length) { box.innerHTML = '<div class="empty"><div class="em-ico">📦</div>无匹配产品</div>'; return; }
+    box.innerHTML = list.map(function (p) {
+      return '<div class="cand-item" data-id="' + p.id + '"><div class="cand-main"><div class="cand-name">' + esc(p.name) + '</div><div class="cand-sub">' + esc(p.code) + '</div></div><span class="badge process">选</span></div>';
+    }).join('');
+    box.querySelectorAll('.cand-item').forEach(function (el) {
+      el.addEventListener('click', function () {
+        curBatch.product = list.filter(function (r) { return r.id === el.getAttribute('data-id'); })[0];
+        stepBatch('parts');
+      });
+    });
+  }
+
+  function renderBatchPartList() {
+    var box = curBatch._body.querySelector('#bptlist');
+    var list = curBatch.parts;
+    if (!list.length) { box.innerHTML = '<div class="empty"><div class="em-ico">🔩</div>该产品暂无工序，请联系管理员维护</div>'; return; }
+    box.innerHTML = '<div class="chip-row">' + list.map(function (p) {
+      var sel = curBatch.selected[p.id];
+      return '<div class="chip' + (sel ? ' sel' : '') + '" data-id="' + p.id + '">' +
+        '<span class="chip-t">' + esc(p.part_no) + ' · ' + esc(p.part_name) + '</span>' +
+        '<input class="chip-qty" type="number" min="1" inputmode="numeric" placeholder="数量" style="display:' + (sel ? 'inline-block' : 'none') + '" value="' + (sel ? sel.qty : '') + '">' +
+      '</div>';
+    }).join('') + '</div>';
+    box.querySelectorAll('.chip').forEach(function (el) {
+      var pid = el.getAttribute('data-id');
+      el.addEventListener('click', function (e) {
+        if (curBatch.selected[pid]) {
+          delete curBatch.selected[pid];
+          el.classList.remove('sel');
+          el.querySelector('.chip-qty').style.display = 'none';
+        } else {
+          curBatch.selected[pid] = { part: list.filter(function (r) { return r.id === pid; })[0], qty: 0 };
+          el.classList.add('sel');
+          var inp = el.querySelector('.chip-qty');
+          inp.style.display = 'inline-block';
+          inp.focus();
+        }
+        e.stopPropagation();
+      });
+      var inp = el.querySelector('.chip-qty');
+      inp.addEventListener('click', function (e) { e.stopPropagation(); });
+      inp.addEventListener('input', function (e) {
+        var v = parseInt(e.target.value, 10);
+        if (curBatch.selected[pid]) curBatch.selected[pid].qty = (isNaN(v) ? 0 : v);
+      });
+    });
+  }
+
+  function submitBatch() {
+    var rows = [];
+    Object.keys(curBatch.selected).forEach(function (pid) {
+      var s = curBatch.selected[pid];
+      if (s.qty > 0) rows.push({
+        worker_id: App.session.user.id,
+        product_id: curBatch.product.id,
+        part_id: s.part.id,
+        process: s.part.part_name,
+        shift: curBatch.shift,
+        qty: s.qty,
+        record_date: Db._today()
+      });
+    });
+    if (!curBatch.shift) { UI.toast('请选择班次', true); return; }
+    if (rows.length === 0) { UI.toast('请至少填写一道工序的数量', true); return; }
+    UI.toast('提交中…');
+    Db.insertRecordsBatch(rows).then(function () {
+      UI.toast('已提交 ' + rows.length + ' 条 ✓');
+      curBatch._close();
+      render(App.currentTab === 'today' ? 'today' : 'record');
+    }).catch(function (e) { UI.toast('提交失败：' + (e.message || e), true); });
+  }
+
   // ---------- 视图 ----------
   function render(tab) {
     if (tab === 'record') return renderRecord();
@@ -176,11 +341,13 @@ window.Employee = (function () {
           '</div>' +
         '</div>' +
         '<button class="btn" id="goAdd">＋ 新增上报</button>' +
+        '<button class="btn ghost" id="goBatch">📋 批量填报</button>' +
         '<div class="card emp-tips">' +
           '<div class="et-ico">💡</div>' +
           '<div class="et-body"><b>怎么用</b><p class="muted">选产品 → 选工序 → 填数量 → 提交。工序由管理员预置，无需手输，避免写错。</p></div>' +
         '</div>';
       document.getElementById('goAdd').addEventListener('click', openAdd);
+      document.getElementById('goBatch').addEventListener('click', openBatchAdd);
     }).catch(function (e) {
       view.innerHTML = '<div class="empty"><div class="em-ico">⚠️</div>加载失败：' + esc(e.message || e) + '</div>';
     });

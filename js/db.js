@@ -90,6 +90,9 @@
       insertRecord: function (rec) {
         return client.from('production_records').insert(rec).select().then(function (r) { if (r.error) throw r.error; return r.data; });
       },
+      insertRecordsBatch: function (rows) {
+        return client.from('production_records').insert(rows).select().then(function (r) { if (r.error) throw r.error; return r.data; });
+      },
       updateRecord: function (id, patch) {
         patch.updated_at = new Date().toISOString();
         return client.from('production_records').update(patch).eq('id', id).then(function (r) { if (r.error) throw r.error; });
