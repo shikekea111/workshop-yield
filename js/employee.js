@@ -32,6 +32,15 @@ window.Employee = (function () {
     return '夜班'; // 0-8 点
   }
 
+  // 报工日期可回溯窗口（天）；返回 today - n 的 YYYY-MM-DD（用于限制日期框可选范围）
+  function agoNDays(n) {
+    var d = new Date();
+    d.setDate(d.getDate() - n);
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + day;
+  }
+
   // ---------- 上报（同屏分步选择，避免嵌套弹层覆盖） ----------
   function openAdd() {
     curDraft = { product: null, part: null, shift: null };
@@ -74,6 +83,7 @@ window.Employee = (function () {
       body.innerHTML =
         '<div class="selbox" id="bProd"><div class="sb-label">产品</div><div class="sb-value">' + esc(curDraft.product.code) + ' ' + esc(curDraft.product.name) + '</div></div>' +
         '<div class="selbox" id="bPart"><div class="sb-label">工序</div><div class="sb-value">' + esc(curDraft.part.part_no) + ' · ' + esc(curDraft.part.part_name) + '</div></div>' +
+        '<div class="field"><label>报工日期</label><input id="rdate" type="date" value="' + Db._today() + '" min="' + agoNDays(3) + '" max="' + Db._today() + '"></div>' +
         '<div class="field"><label>班次</label><div class="shift-pick" id="shiftPick">' +
           '<div class="shift-chip" data-shift="白班">☀️ 白班</div>' +
           '<div class="shift-chip" data-shift="中班">🌙 中班</div>' +
@@ -143,7 +153,7 @@ window.Employee = (function () {
       process: curDraft.part.part_name,
       shift: curDraft.shift,
       qty: qty,
-      record_date: Db._today()
+      record_date: (document.getElementById('rdate').value || Db._today())
     }).then(function () {
       UI.toast('已提交 ✓');
       curDraft._close();
@@ -179,6 +189,7 @@ window.Employee = (function () {
         '　<a data-act="back" style="color:var(--primary)">重选</a></p>' +
         '<p class="muted" style="margin:-4px 0 8px">勾选工序并填写数量（可多选）</p>' +
         '<div id="bptlist"><div class="ocr-loading">加载中…</div></div>' +
+        '<div class="field"><label>报工日期（整批统一）</label><input id="brdate" type="date" value="' + Db._today() + '" min="' + agoNDays(3) + '" max="' + Db._today() + '"></div>' +
         '<div class="field"><label>班次（整批统一）</label><div class="shift-pick" id="bshiftPick">' +
           '<div class="shift-chip" data-shift="白班">☀️ 白班</div>' +
           '<div class="shift-chip" data-shift="中班">🌙 中班</div>' +
@@ -302,7 +313,7 @@ window.Employee = (function () {
         process: s.part.part_name,
         shift: curBatch.shift,
         qty: s.qty,
-        record_date: Db._today()
+        record_date: (document.getElementById('brdate').value || Db._today())
       });
     });
     if (!curBatch.shift) { UI.toast('请选择班次', true); return; }
@@ -325,15 +336,14 @@ window.Employee = (function () {
   function renderRecord() {
     var view = document.getElementById('view');
     var today = Db._today();
-    Db.listMyRecords(today).then(function (rows) {
+    var from = agoNDays(3);
+    Db.listMyRecordsRange(from, today).then(function (rows) {
       var total = (rows || []).reduce(function (a, r) { return a + (r.qty || 0); }, 0);
-      var d = new Date();
-      var wd = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
       var n = rows ? rows.length : 0;
       view.innerHTML =
         '<div class="emp-hero">' +
-          '<div class="eh-date">' + today + ' · ' + wd + '</div>' +
-          '<div class="eh-greet">👋 今天辛苦了</div>' +
+          '<div class="eh-date">' + from + ' ~ ' + today + '</div>' +
+          '<div class="eh-greet">👋 最近产量</div>' +
           '<div class="eh-stats">' +
             '<div class="eh-stat"><div class="eh-num">' + n + '</div><div class="eh-lbl">已报工序</div></div>' +
             '<div class="eh-div"></div>' +
@@ -355,10 +365,10 @@ window.Employee = (function () {
 
   function renderToday() {
     var view = document.getElementById('view');
-    view.innerHTML = '<div class="card"><h2>📅 今日上报</h2><div id="todayList"><div class="ocr-loading">加载中…</div></div></div>';
-    Db.listMyRecords(Db._today()).then(function (rows) {
+    view.innerHTML = '<div class="card"><h2>📅 近 3 天上报</h2><div id="todayList"><div class="ocr-loading">加载中…</div></div></div>';
+    Db.listMyRecordsRange(agoNDays(3), Db._today()).then(function (rows) {
       var box = document.getElementById('todayList');
-      if (!rows || !rows.length) { box.innerHTML = '<div class="empty"><div class="em-ico">📭</div>今天还没有上报</div>'; return; }
+      if (!rows || !rows.length) { box.innerHTML = '<div class="empty"><div class="em-ico">📭</div>近 3 天还没有上报</div>'; return; }
       box.innerHTML = rows.map(function (r) {
         var pn = (r.parts && r.parts.part_name) ? r.parts.part_name : '';
         var pno = (r.parts && r.parts.part_no) ? r.parts.part_no : '';
@@ -367,7 +377,7 @@ window.Employee = (function () {
         return '<div class="rec-item" data-id="' + r.id + '">' +
           '<div class="rec-ico">📦</div>' +
           '<div class="rec-body"><div class="rec-title">' + esc(pno) + ' · ' + esc(pn) + '</div>' +
-          '<div class="rec-sub">' + esc(pname) + '　' + time + (r.shift ? '　<span class="shift-tag">' + esc(r.shift) + '</span>' : '') + '</div></div>' +
+          '<div class="rec-sub">' + r.record_date + '　' + esc(pname) + '　' + time + (r.shift ? '　<span class="shift-tag">' + esc(r.shift) + '</span>' : '') + '</div></div>' +
           '<div class="rec-qty">' + r.qty + ' 件</div>' +
           '<div class="rec-actions"><button class="icon-btn" data-act="edit" title="修改">✏️</button><button class="icon-btn" data-act="del" title="删除">🗑️</button></div>' +
           '</div>';
@@ -391,7 +401,7 @@ window.Employee = (function () {
         // count = 服务端实际删除的行数；RLS 拦截时可能为 0（如记录不是今天的）
         var n = (res && res.count != null) ? res.count : 0;
         if (n === 0) {
-          UI.toast('未删除：该记录可能不是今天的，或已被删除', true);
+          UI.toast('未删除：该记录可能已超过 3 天，或已被删除', true);
         } else {
           UI.toast('已删除 1 条');
         }

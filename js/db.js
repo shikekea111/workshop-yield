@@ -110,6 +110,15 @@
             .then(function (r) { if (r.error) throw r.error; return r.data; });
         });
       },
+      // 按 record_date 区间查本人记录（用于「近 N 天上报」tab，支持夜班次日补报）
+      listMyRecordsRange: function (from, to) {
+        return sess().then(function (s) {
+          return client.from('production_records').select('*, products(name), parts(part_no,part_name)')
+            .eq('worker_id', s.user.id).gte('record_date', from).lte('record_date', to)
+            .order('record_date', { ascending: false }).order('submitted_at', { ascending: false })
+            .then(function (r) { if (r.error) throw r.error; return r.data; });
+        });
+      },
       listMyHistory: function (from, to) {
         return sess().then(function (s) {
           return client.from('production_records').select('*, products(name), parts(part_no,part_name)')
