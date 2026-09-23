@@ -26,6 +26,7 @@ window.Admin = (function () {
     view.innerHTML =
       '<div class="card"><h2>📊 产量汇总</h2>' +
         '<div class="filters">' +
+          '<div class="field"><label>车间</label><select id="rws"><option value="">全部</option></select></div>' +
           '<div class="field"><label>从</label><input id="rf" type="date"></div>' +
           '<div class="field"><label>到</label><input id="rt" type="date"></div>' +
           '<div class="field"><label>产品</label><select id="rp"><option value="">全部</option></select></div>' +
@@ -39,9 +40,26 @@ window.Admin = (function () {
         '<th>日期</th><th>产品编号</th><th>产品名</th><th>工序号</th><th>工序名</th><th>员工</th><th>班次</th><th>数量</th>' +
         '</tr></thead><tbody id="rtbody"></tbody><tfoot id="rtfoot"></tfoot></table></div>';
 
+    // 产品与车间联动：先取全部产品，按车间填充下拉；选车间后产品下拉只留该车间
+    var allProducts = [];
     Db.listAllProducts().then(function (ps) {
-      var sel = document.getElementById('rp');
-      (ps || []).forEach(function (p) { sel.insertAdjacentHTML('beforeend', '<option value="' + p.id + '">' + esc(p.code) + ' ' + esc(p.name) + '</option>'); });
+      allProducts = ps || [];
+      var wsSel = document.getElementById('rws');
+      var rpSel = document.getElementById('rp');
+      var seen = {};
+      allProducts.forEach(function (p) {
+        rpSel.insertAdjacentHTML('beforeend', '<option value="' + p.id + '">' + esc(p.code) + ' ' + esc(p.name) + '</option>');
+        var w = p.workshop || '';
+        if (w && !seen[w]) { seen[w] = true; wsSel.insertAdjacentHTML('beforeend', '<option value="' + esc(w) + '">' + esc(w) + '</option>'); }
+      });
+      wsSel.addEventListener('change', function () {
+        var w = wsSel.value, cur = rpSel.value;
+        rpSel.innerHTML = '<option value="">全部</option>';
+        allProducts.forEach(function (p) {
+          if (!w || (p.workshop || '') === w) rpSel.insertAdjacentHTML('beforeend', '<option value="' + p.id + '">' + esc(p.code) + ' ' + esc(p.name) + '</option>');
+        });
+        if (cur && ![].some.call(rpSel.options, function (o) { return o.value === cur; })) rpSel.value = '';
+      });
     });
     Db.listWorkers().then(function (ws) {
       var sel = document.getElementById('rw');
@@ -61,7 +79,8 @@ window.Admin = (function () {
       from: document.getElementById('rf').value || '2000-01-01',
       to: document.getElementById('rt').value || '2999-12-31',
       product_id: document.getElementById('rp').value || null,
-      worker_id: document.getElementById('rw').value || null
+      worker_id: document.getElementById('rw').value || null,
+      workshop: document.getElementById('rws').value || null
     };
     document.getElementById('rtbody').innerHTML = '<tr><td colspan="8" class="center-note">查询中…</td></tr>';
     // 先建名称映射表，再拉服务端聚合结果（仅汇总行，体积极小）
@@ -132,6 +151,7 @@ window.Admin = (function () {
     view.innerHTML =
       '<div class="card"><h2>🗓️ 月度矩阵报表</h2>' +
         '<div class="filters">' +
+          '<div class="field"><label>车间</label><select id="mws"><option value="">全部</option></select></div>' +
           '<div class="field"><label>月份</label><input id="mm" type="month" value="' + defaultMonth + '"></div>' +
           '<div class="field"><label>产品</label><select id="mp"><option value="">全部</option></select></div>' +
           '<div class="field"><label>员工</label><select id="mw"><option value="">全部</option></select></div>' +
@@ -141,9 +161,25 @@ window.Admin = (function () {
       '</div>' +
       '<div class="matrix-wrap"><table class="matrix" id="mtbl"></table></div>';
 
+    var allProducts = [];
     Db.listAllProducts().then(function (ps) {
-      var sel = document.getElementById('mp');
-      (ps || []).forEach(function (p) { sel.insertAdjacentHTML('beforeend', '<option value="' + p.id + '">' + esc(p.code) + ' ' + esc(p.name) + '</option>'); });
+      allProducts = ps || [];
+      var wsSel = document.getElementById('mws');
+      var mpSel = document.getElementById('mp');
+      var seen = {};
+      allProducts.forEach(function (p) {
+        mpSel.insertAdjacentHTML('beforeend', '<option value="' + p.id + '">' + esc(p.code) + ' ' + esc(p.name) + '</option>');
+        var w = p.workshop || '';
+        if (w && !seen[w]) { seen[w] = true; wsSel.insertAdjacentHTML('beforeend', '<option value="' + esc(w) + '">' + esc(w) + '</option>'); }
+      });
+      wsSel.addEventListener('change', function () {
+        var w = wsSel.value, cur = mpSel.value;
+        mpSel.innerHTML = '<option value="">全部</option>';
+        allProducts.forEach(function (p) {
+          if (!w || (p.workshop || '') === w) mpSel.insertAdjacentHTML('beforeend', '<option value="' + p.id + '">' + esc(p.code) + ' ' + esc(p.name) + '</option>');
+        });
+        if (cur && ![].some.call(mpSel.options, function (o) { return o.value === cur; })) mpSel.value = '';
+      });
     });
     Db.listWorkers().then(function (ws) {
       var sel = document.getElementById('mw');
@@ -160,9 +196,10 @@ window.Admin = (function () {
     var year = +m.slice(0, 4), month = +m.slice(5, 7);
     var pid = document.getElementById('mp').value || null;
     var wid = document.getElementById('mw').value || null;
+    var ws = document.getElementById('mws').value || null;
     var tbl = document.getElementById('mtbl');
     tbl.innerHTML = '<tbody><tr><td class="center-note" style="padding:20px">查询中…</td></tr></tbody>';
-    Db.monthlyMatrix({ year: year, month: month, product_id: pid, worker_id: wid })
+    Db.monthlyMatrix({ year: year, month: month, product_id: pid, worker_id: wid, workshop: ws })
       .then(function (rows) {
         lastMatrix = { rows: rows || [], year: year, month: month };
         renderMatrix(rows || []);
@@ -261,7 +298,7 @@ window.Admin = (function () {
     var view = document.getElementById('view');
     view.innerHTML =
       '<div class="card"><div class="row-between"><h2>📦 产品</h2><div><button class="btn sm" id="batchP">批量录入</button> <button class="btn sm" id="addP">+ 新增产品</button></div></div>' +
-        '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>编号</th><th>名称</th><th>状态</th><th>操作</th></tr></thead><tbody id="pbody"></tbody></table></div>' +
+        '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>编号</th><th>名称</th><th>车间</th><th>状态</th><th>操作</th></tr></thead><tbody id="pbody"></tbody></table></div>' +
       '</div>' +
       '<div class="card"><div class="row-between"><h2>🔩 工序</h2><button class="btn sm" id="addPt">+ 新增工序</button></div>' +
         '<div class="field"><label>选择产品</label>' +
@@ -278,7 +315,7 @@ window.Admin = (function () {
         ps = ps || [];
         var pb = document.getElementById('pbody');
         pb.innerHTML = ps.map(function (p) {
-          return '<tr><td>' + esc(p.code) + '</td><td>' + esc(p.name) + '</td><td>' + (p.enabled ? '<span class="badge ok">启用</span>' : '<span class="badge off">停用</span>') + '</td>' +
+          return '<tr><td>' + esc(p.code) + '</td><td>' + esc(p.name) + '</td><td>' + esc(p.workshop || '') + '</td><td>' + (p.enabled ? '<span class="badge ok">启用</span>' : '<span class="badge off">停用</span>') + '</td>' +
             '<td><button class="btn sm" data-edit="' + p.id + '">编辑</button> <button class="btn sm danger" data-del="' + p.id + '">' + (p.enabled ? '停用' : '启用') + '</button></td></tr>';
         }).join('');
 
@@ -385,13 +422,14 @@ window.Admin = (function () {
 
   function editProduct(p) {
     p = p || {};
-    UI.modal('产品', '<div class="field"><label>产品编号</label><input id="pc" value="' + esc(p.code || '') + '" placeholder="如 BED-001"></div><div class="field"><label>产品名称</label><input id="pn" value="' + esc(p.name || '') + '" placeholder="如 单人充气床"></div>', {
+    UI.modal('产品', '<div class="field"><label>产品编号</label><input id="pc" value="' + esc(p.code || '') + '" placeholder="如 BED-001"></div><div class="field"><label>产品名称</label><input id="pn" value="' + esc(p.name || '') + '" placeholder="如 单人充气床"></div><div class="field"><label>车间</label><input id="pws" value="' + esc(p.workshop || '') + '" placeholder="如 一车间（留空=未标注）"></div>', {
       center: true, okText: '保存',
       onOk: function () {
         var code = document.getElementById('pc').value.trim();
         var name = document.getElementById('pn').value.trim();
+        var workshop = document.getElementById('pws').value.trim();
         if (!code || !name) { UI.toast('请填编号和名称', true); return; }
-        Db.upsertProduct({ id: p.id || undefined, code: code, name: name }).then(function () { UI.close(); UI.toast('已保存'); renderProducts(); }).catch(function (e) { UI.toast('保存失败：' + (e.message || e), true); });
+        Db.upsertProduct({ id: p.id || undefined, code: code, name: name, workshop: workshop || null }).then(function () { UI.close(); UI.toast('已保存'); renderProducts(); }).catch(function (e) { UI.toast('保存失败：' + (e.message || e), true); });
       }
     });
   }
@@ -424,7 +462,7 @@ window.Admin = (function () {
   // 支持 TAB / 逗号 / 中文逗号 分隔；含「产品编号/工序号」字样的一行视为表头自动跳过。
   function openBatchImportProducts() {
     var body =
-      '<p class="muted" style="margin-top:0">在 Excel 里选中「产品编号、产品名称、工序号、工序名」四列（每个产品的 20~30 道工序各占一行，产品编号/名称可重复），直接 <b>复制粘贴</b> 到下方；或上传 CSV 文件。<br>系统会自动按「产品编号」归集产品、按「产品+工序号」去重，重复运行只更新不会重复建。</p>' +
+      '<p class="muted" style="margin-top:0">在 Excel 里选中「产品编号、产品名称、工序号、工序名」四列（每个产品的 20~30 道工序各占一行，产品编号/名称可重复），直接 <b>复制粘贴</b> 到下方；或上传 CSV 文件。第 5 列可填「车间」（可选），方便一次给所有产品标注车间。<br>系统会自动按「产品编号」归集产品、按「产品+工序号」去重，重复运行只更新不会重复建。</p>' +
       '<div class="field"><label>粘贴数据（每行：产品编号, 产品名称, 工序号, 工序名）</label>' +
         '<textarea id="bpTxt" placeholder="BED-001\t单人充气床\t10\t裁布&#10;BED-001\t单人充气床\t20\t缝纫&#10;BED-002\t双人充气床\t10\t裁布"></textarea></div>' +
       '<div class="field"><label>或上传文件（.csv / .txt / .tsv）</label>' +
@@ -451,15 +489,19 @@ window.Admin = (function () {
         parts = parts.map(function (p) { return p.trim(); }).filter(function (p) { return p.length > 0; });
         if (parts.length < 3) return; // 至少要 产品编号 + 工序号 + 工序名
         // 跳过表头
-        if (idx === 0 && /产品编号|产品名称|工序号|工序名|编号|名称|part/i.test(parts.join(' '))) return;
-        var code, name, partNo, partName;
-        if (parts.length >= 4) {
-          code = parts[0]; name = parts[1]; partNo = parts[2]; partName = parts[3];
+        if (idx === 0 && /产品编号|产品名称|工序号|工序名|编号|名称|车间|part/i.test(parts.join(' '))) return;
+        var code, name, partNo, partName, workshop;
+        if (parts.length >= 5) {
+          // 5 列：产品编号, 产品名称, 工序号, 工序名, 车间
+          code = parts[0]; name = parts[1]; partNo = parts[2]; partName = parts[3]; workshop = parts[4];
+        } else if (parts.length >= 4) {
+          // 4 列：产品编号, 产品名称, 工序号, 工序名
+          code = parts[0]; name = parts[1]; partNo = parts[2]; partName = parts[3]; workshop = '';
         } else {
           // 只有3列：产品编号, 工序号, 工序名（产品名称默认用编号）
-          code = parts[0]; name = ''; partNo = parts[1]; partName = parts[2];
+          code = parts[0]; name = ''; partNo = parts[1]; partName = parts[2]; workshop = '';
         }
-        rows.push({ code: code, name: name || code, part_no: partNo, part_name: partName });
+        rows.push({ code: code, name: name || code, part_no: partNo, part_name: partName, workshop: workshop || '' });
       });
       return rows;
     }
@@ -485,9 +527,9 @@ window.Admin = (function () {
       });
       var html = '<div class="card"><p style="margin:0"><b>解析结果</b>：产品 ' + prodCount + ' 个，工序 ' + partCount + ' 条。</p>' +
         '<p class="muted" style="margin:6px 0 0">前 5 行预览：</p></div>' +
-        '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>产品编号</th><th>产品名称</th><th>工序号</th><th>工序名</th></tr></thead><tbody>';
+        '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>产品编号</th><th>产品名称</th><th>车间</th><th>工序号</th><th>工序名</th></tr></thead><tbody>';
       rows.slice(0, 5).forEach(function (r) {
-        html += '<tr><td>' + esc(r.code) + '</td><td>' + esc(r.name) + '</td><td>' + esc(r.part_no) + '</td><td>' + esc(r.part_name) + '</td></tr>';
+        html += '<tr><td>' + esc(r.code) + '</td><td>' + esc(r.name) + '</td><td>' + esc(r.workshop || '') + '</td><td>' + esc(r.part_no) + '</td><td>' + esc(r.part_name) + '</td></tr>';
       });
       html += '</tbody></table></div>';
       prev.innerHTML = html;
@@ -520,12 +562,17 @@ window.Admin = (function () {
       // 1) 产品去重后批量 upsert（按 code 幂等），取回 code->id 映射
       var prodMap = {};
       pending.forEach(function (r) {
-        if (!prodMap[r.code]) prodMap[r.code] = { code: r.code, name: r.name };
+        if (!prodMap[r.code]) prodMap[r.code] = { code: r.code, name: r.name, workshop: r.workshop || null };
         else if (r.name && r.name !== r.code && (prodMap[r.code].name === r.code || !prodMap[r.code].name)) {
           prodMap[r.code].name = r.name; // 取更完整的名称
         }
       });
-      var products = Object.keys(prodMap).map(function (k) { return prodMap[k]; });
+      var products = Object.keys(prodMap).map(function (k) {
+        var p = prodMap[k];
+        // 仅当批次里提供了车间才更新该字段，避免无车间列的重导入把已标车间清空
+        if (p.workshop) return p;
+        return { code: p.code, name: p.name };
+      });
 
       Db.upsertProductsBatch(products).then(function (savedProducts) {
         var codeToId = {};
