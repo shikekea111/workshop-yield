@@ -24,15 +24,19 @@ window.App = { mode: 'emp', session: null, profile: null, currentTab: null };
     var tabbar = document.getElementById('tabbar');
     if (tabbar) tabbar.style.display = 'none';
     var view = document.getElementById('view');
-    // 员工端：只输工号数字，自动补 @factory.local；管理员端：完整邮箱
-    var emailField = (App.mode === 'admin')
-      ? '<div class="field"><label>邮箱</label><input id="lgEmail" type="email" placeholder="管理员账号邮箱" autocomplete="username" /></div>'
-      : '<div class="field"><label>工号</label>' +
-          '<div class="input-suffix">' +
-            '<input id="lgEmail" type="text" inputmode="numeric" placeholder="如 1004" autocomplete="username" />' +
-            '<span class="suffix">@' + (window.APP_CONFIG.EMAIL_DOMAIN || 'factory.local') + '</span>' +
-          '</div></div>';
-    var hint = (App.mode === 'admin')
+    // 登录名形态取决于后端：
+    //   supabase  = 邮箱登录（工号会自动补 @域名）；cloudbase = username 直登（不补域名）
+    var backend = (window.APP_CONFIG && window.APP_CONFIG.BACKEND) || 'supabase';
+    var isCloudBase = (backend === 'cloudbase');
+    var domain = window.APP_CONFIG.EMAIL_DOMAIN || 'factory.local';
+    var suffixBox = '<div class="input-suffix">' +
+        '<input id="lgEmail" type="text" inputmode="numeric" placeholder="如 1004" autocomplete="username" />' +
+        '<span class="suffix">@' + domain + '</span>' +
+      '</div>';
+    var emailField = isCloudBase && App.mode === 'admin'
+      ? '<div class="field"><label>工号</label><input id="lgEmail" type="text" placeholder="如 0001" autocomplete="username" /></div>'
+      : '<div class="field"><label>工号</label>' + suffixBox + '</div>';
+    var hint = isCloudBase && App.mode === 'admin'
       ? '账号由管理员创建。首次登录后可在「我的」修改密码。'
       : '只需输入工号，域名自动补全。首次登录后可在「我的」修改密码。';
     view.innerHTML =
@@ -57,8 +61,11 @@ window.App = { mode: 'emp', session: null, profile: null, currentTab: null };
     var raw = document.getElementById('lgEmail').value.trim();
     var pw = document.getElementById('lgPw').value;
     if (!raw || !pw) { UI.toast('请输入账号和密码', true); return; }
-    // 员工端：只输了工号数字时，自动补 @factory.local（已是完整邮箱或管理员邮箱则不动）
-    var email = (App.mode === 'emp' && raw.indexOf('@') < 0)
+    // 补域名规则：supabase（邮箱登录）→ 只要没输 @ 就补；cloudbase（username 登录）→ 仅员工端补
+    var backend2 = (window.APP_CONFIG && window.APP_CONFIG.BACKEND) || 'supabase';
+    var isCb2 = (backend2 === 'cloudbase');
+    var needDomain = (raw.indexOf('@') < 0) && (isCb2 ? (App.mode === 'emp') : true);
+    var email = needDomain
       ? raw + '@' + (window.APP_CONFIG.EMAIL_DOMAIN || 'factory.local')
       : raw;
     UI.toast('登录中…');

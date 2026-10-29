@@ -27,3 +27,8 @@ npm-debug.log*
 create*.json
 pages*.json
 *_resp.json
+
+# 员工花名册/建号名单（含姓名+工号，属个人信息，仓库公开，禁止提交）
+tools/
+*employee_roster*
+*bulk_users*

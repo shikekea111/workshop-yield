@@ -1,0 +1,10 @@
+{
+  "name": "batch-create-users",
+  "version": "1.0.0",
+  "description": "从托管拉取工号清单批量创建 CloudBase 内部用户",
+  "main": "index.js",
+  "dependencies": {
+    "@cloudbase/node-sdk": "^2.0.0",
+    "@cloudbase/manager-node": "^5.0.0"
+  }
+}

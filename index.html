@@ -9,6 +9,27 @@
   <link rel="icon" href="icon.png" />
   <title>车间产量上报</title>
   <link rel="stylesheet" href="css/styles.css?v=12" />
+  <script>
+    // 全局错误浮层：把任何 JS 报错红字显示在页面顶部，避免"空白页无提示"
+    // 关键：每次错误都【追加】一个新浮层（不覆盖），否则真正的根因会被级联错误盖掉
+    (function () {
+      function showErr(msg, tag) {
+        var box = document.createElement('div');
+        box.style.cssText = 'position:fixed;top:' + (document.querySelectorAll('.__errbox').length * 0) + 'px;left:0;right:0;z-index:99999;margin-bottom:2px;padding:12px 14px;background:#c0392b;color:#fff;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word;box-shadow:0 2px 8px rgba(0,0,0,.3)';
+        box.className = '__errbox';
+        box.textContent = '⚠️【' + (tag || '脚本错误') + '】请把这段红字截图发我：\n' + msg;
+        (document.body || document.documentElement).appendChild(box);
+      }
+      window.__reportFatal = showErr;
+      window.addEventListener('error', function (e) {
+        showErr((e.message || 'Error') + '\n' + (e.filename || '') + ':' + (e.lineno || '') + ':' + (e.colno || ''), 'window.error');
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        var r = e.reason;
+        showErr('Promise reject: ' + (r && r.message ? r.message : (r && r.error ? r.error.message : (r ? JSON.stringify(r) : 'unknown'))), 'unhandledrejection');
+      });
+    })();
+  </script>
 </head>
 <body class="app-emp">
   <header class="app-header">
@@ -29,17 +50,19 @@
 
   <div id="modalRoot"></div>
 
-  <!-- supabase-js 本地引用（国内网络更稳） -->
-  <script src="js/vendor/supabase.min.js"></script>
-  <script src="js/config.js"></script>
-  <script src="js/db.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/employee.js"></script>
-  <script src="js/app.js"></script>
+  <!-- supabase-js 本地引用（旧环境回滚用，保留） -->
+  <script src="js/vendor/supabase.min.js?v=24"></script>
+  <!-- CloudBase js-sdk 本地引用（国内腾讯云开发，自托管保证速度） -->
+  <script src="js/vendor/cloudbase.min.js?v=24"></script>
+  <script src="js/config.js?v=24"></script>
+  <script src="js/db.js?v=24"></script>
+  <script src="js/ui.js?v=24"></script>
+  <script src="js/employee.js?v=24"></script>
+  <script src="js/app.js?v=24"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('sw.js').then(function (reg) {
+        navigator.serviceWorker.register('sw.js?v=24').then(function (reg) {
           function promptUpdate() {
             if (document.getElementById('swUpdateBar')) return;
             var bar = document.createElement('div');

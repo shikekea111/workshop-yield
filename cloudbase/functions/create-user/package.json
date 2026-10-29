@@ -1,0 +1,10 @@
+{
+  "name": "create-user",
+  "version": "1.0.0",
+  "description": "CloudBase 员工/班组长创建云函数",
+  "main": "index.js",
+  "dependencies": {
+    "@cloudbase/node-sdk": "^2.0.0",
+    "@cloudbase/manager-node": "^5.0.0"
+  }
+}
